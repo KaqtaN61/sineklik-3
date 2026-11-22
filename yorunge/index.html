@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Yörünge</title>
+<style>
+  :root { --bg:#0b0d17; --fg:#e8ecff; --muted:#8a93b8; --gold:#ffc94a; --red:#ff4d6d; --cyan:#5ee7ff; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { height:100%; background:var(--bg); color:var(--fg); overflow:hidden;
+    font-family:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; touch-action:none;
+    user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; }
+  canvas { display:block; width:100vw; height:100vh; }
+  #hud { position:fixed; top:12px; left:16px; right:16px; display:flex; justify-content:space-between;
+    align-items:flex-start; pointer-events:none; font-variant-numeric:tabular-nums; }
+  #score { font-size:32px; font-weight:800; }
+  #best { font-size:14px; color:var(--muted); text-align:right; }
+  #combo { font-size:14px; color:var(--gold); min-height:18px; }
+  #overlay { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:14px; text-align:center; padding:16px; pointer-events:none; }
+  #overlay h1 { font-size:clamp(40px, 10vw, 72px); letter-spacing:4px;
+    background:linear-gradient(90deg, var(--cyan), var(--gold)); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  #overlay p { color:var(--muted); font-size:16px; max-width:360px; line-height:1.5; }
+  #overlay .big { color:var(--fg); font-size:20px; font-weight:700; }
+  #overlay .blink { animation:blink 1.2s ease-in-out infinite; color:var(--fg); }
+  @keyframes blink { 50% { opacity:.35; } }
+  #shakeBtn { position:fixed; bottom:14px; right:16px; background:#1a1f36; color:var(--muted);
+    border:1px solid #2a3157; border-radius:8px; padding:8px 12px; font-size:13px; cursor:pointer; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div><div id="score">0</div><div id="combo"></div></div>
+  <div id="best">En iyi: 0</div>
+</div>
+<div id="overlay">
+  <h1>YÖRÜNGE</h1>
+  <p>Işık topun merkezin etrafında döner.<br><b>Dokun</b> ya da <b>Space</b>: bir dış halkaya atla (en dıştan en içe döner).<br>
+  <span style="color:var(--gold)">Altın küreleri</span> topla, <span style="color:var(--red)">kırmızı engellerden</span> kaç.</p>
+  <p class="blink">Başlamak için dokun</p>
+</div>
+<button id="shakeBtn">Sarsıntı: Açık</button>
+
+<script>
+(() => {
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  const $score = document.getElementById('score');
+  const $best = document.getElementById('best');
+  const $combo = document.getElementById('combo');
+  const $overlay = document.getElementById('overlay');
+  const $shakeBtn = document.getElementById('shakeBtn');
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+  };
+
+  let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, R = 0;
+  const RING_F = [0.38, 0.66, 0.94];
+  const ringR = i => R * RING_F[i];
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * DPR; cv.height = H * DPR;
+    cx = W / 2; cy = H / 2 + 20;
+    R = Math.min(W, H - 80) * 0.44;
+  }
+  addEventListener('resize', resize); resize();
+
+  // ---------- Juice: trauma shake + hit-stop (real-time restore, newest wins) ----------
+  let shakeOn = store.get('yorunge.shake', true);
+  let trauma = 0, shakeT = 0, timeScale = 1, hitStopUntil = 0, hitStopId = 0;
+  const addTrauma = a => { trauma = Math.min(1, trauma + a); };
+  function hitStop(dur, slow = 0.05) {
+    const id = ++hitStopId;
+    timeScale = slow;
+    hitStopUntil = performance.now() + dur * 1000;
+    setTimeout(() => { if (id === hitStopId) timeScale = 1; }, dur * 1000);
+  }
+  let flash = 0;
+  const particles = [], pops = [];
+  function burst(x, y, n, color, speed = 220) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, s = speed * (0.3 + Math.random() * 0.7);
+      particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.5 + Math.random() * 0.4, t: 0, color, r: 2 + Math.random() * 2.5 });
+    }
+  }
+  function feedback(tier, x, y, color) {
+    if (tier === 'small') { addTrauma(0.12); burst(x, y, 4, color, 120); }
+    else if (tier === 'medium') { addTrauma(0.35); hitStop(0.05); burst(x, y, 12, color); flash = Math.max(flash, 0.25); }
+    else { addTrauma(0.9); hitStop(0.14); burst(x, y, 36, color, 340); flash = 0.7; }
+    sfx(tier);
+  }
+
+  // ---------- Tiny synth SFX ----------
+  let ac = null;
+  function sfx(tier) {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+      const cfg = { small: ['triangle', 520, 700, 0.08, 0.12], medium: ['sine', 660, 1320, 0.15, 0.2], large: ['sawtooth', 220, 40, 0.5, 0.25] }[tier];
+      o.type = cfg[0]; o.frequency.setValueAtTime(cfg[1], t); o.frequency.exponentialRampToValueAtTime(cfg[2], t + cfg[3]);
+      g.gain.setValueAtTime(cfg[4], t); g.gain.exponentialRampToValueAtTime(0.001, t + cfg[3]);
+      o.connect(g).connect(ac.destination); o.start(t); o.stop(t + cfg[3]);
+    } catch {}
+  }
+
+  // ---------- Game state ----------
+  let state = 'menu', best = store.get('yorunge.best', 0);
+  let score, combo, comboTimer, elapsed, spawnT, orbT, player, obstacles, orbs;
+  const PLAYER_R = 9;
+  $best.textContent = 'En iyi: ' + best;
+
+  function reset() {
+    score = 0; combo = 0; comboTimer = 0; elapsed = 0; spawnT = 1.2; orbT = 0.5;
+    player = { ring: 0, a: -Math.PI / 2, rv: ringR(0), scale: 1, trail: [] };
+    obstacles = []; orbs = [];
+  }
+  reset();
+
+  const speed = () => 1.5 + Math.min(elapsed * 0.025, 1.6);           // rad/s, grows with time
+  const polar = (r, a) => [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+  const angDist = (a, b) => { let d = (b - a) % (Math.PI * 2); if (d < 0) d += Math.PI * 2; return d; };
+
+  function spawnObstacle() {
+    const ring = Math.floor(Math.random() * 3);
+    const a = player.a + 1.4 + Math.random() * (Math.PI * 2 - 2.4);   // never right on top of the player
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    obstacles.push({ ring, a, w: dir * (0.2 + Math.random() * (0.3 + elapsed * 0.01)), len: 0.22 + Math.random() * 0.18, life: 7 + Math.random() * 3, t: 0 });
+  }
+  function spawnOrb() {
+    const ring = Math.floor(Math.random() * 3);
+    orbs.push({ ring, a: player.a + 1 + Math.random() * 4, t: 0, life: 6 });
+  }
+
+  function jump() {
+    if (state !== 'play') { start(); return; }
+    player.ring = (player.ring + 1) % 3;
+    player.scale = 1.5;
+    const [x, y] = polar(player.rv, player.a);
+    feedback('small', x, y, '#5ee7ff');
+  }
+  function start() {
+    if (state === 'dead' && performance.now() < deadAt + 600) return;  // avoid accidental instant restart
+    reset(); state = 'play'; $overlay.classList.add('hidden');
+  }
+  let deadAt = 0;
+  function die() {
+    state = 'dead'; deadAt = performance.now();
+    const [x, y] = polar(player.rv, player.a);
+    feedback('large', x, y, '#ff4d6d');
+    const s = Math.floor(score);
+    const isBest = s > best;
+    if (isBest) { best = s; store.set('yorunge.best', best); $best.textContent = 'En iyi: ' + best; }
+    $overlay.innerHTML = `<h1>YÖRÜNGE</h1><p class="big">Skor: ${s}${isBest ? ' — yeni rekor!' : ''}</p><p>En iyi: ${best}</p><p class="blink">Tekrar için dokun</p>`;
+    setTimeout(() => { if (state === 'dead') $overlay.classList.remove('hidden'); }, 450);
+  }
+
+  // ---------- Input ----------
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); jump(); });
+  $overlay.addEventListener('pointerdown', jump);
+  addEventListener('keydown', e => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'Enter') { e.preventDefault(); if (!e.repeat) jump(); }
+  });
+  function updateShakeBtn() { $shakeBtn.textContent = 'Sarsıntı: ' + (shakeOn ? 'Açık' : 'Kapalı'); }
+  $shakeBtn.addEventListener('pointerdown', e => { e.stopPropagation(); shakeOn = !shakeOn; store.set('yorunge.shake', shakeOn); updateShakeBtn(); });
+  updateShakeBtn();
+
+  // ---------- Update ----------
+  function update(dt) {
+    if (state !== 'play') return;
+    elapsed += dt;
+    score += dt * 10;
+    player.a += speed() * dt;
+    player.rv += (ringR(player.ring) - player.rv) * Math.min(1, dt * 14);   // ease-out toward ring
+    const [px, py] = polar(player.rv, player.a);
+    player.trail.push([px, py]); if (player.trail.length > 14) player.trail.shift();
+
+    if (comboTimer > 0) { comboTimer -= dt; if (comboTimer <= 0) combo = 0; }
+
+    spawnT -= dt;
+    if (spawnT <= 0) { spawnObstacle(); spawnT = Math.max(0.55, 1.6 - elapsed * 0.02); }
+    orbT -= dt;
+    if (orbT <= 0 && orbs.length < 2) { spawnOrb(); orbT = 1.8 + Math.random(); }
+
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      const o = obstacles[i];
+      o.t += dt; o.a += o.w * dt;
+      if (o.t > o.life) { obstacles.splice(i, 1); continue; }
+      if (o.t < 0.5) continue;                                     // fade-in grace period
+      // Arc collision: radius band + angular span.
+      const rr = ringR(o.ring);
+      if (Math.abs(player.rv - rr) < 12 + PLAYER_R * 0.5) {
+        const half = o.len / 2 + PLAYER_R / player.rv;
+        const d = angDist(o.a - half, player.a);
+        if (d < half * 2) { die(); return; }
+      }
+    }
+    for (let i = orbs.length - 1; i >= 0; i--) {
+      const o = orbs[i];
+      o.t += dt;
+      if (o.t > o.life) { orbs.splice(i, 1); continue; }
+      const [ox, oy] = polar(ringR(o.ring), o.a);
+      if (Math.hypot(ox - px, oy - py) < PLAYER_R + 10) {
+        orbs.splice(i, 1);
+        combo = Math.min(combo + 1, 8); comboTimer = 3;
+        const pts = 50 * combo; score += pts;
+        pops.push({ x: ox, y: oy, text: '+' + pts, t: 0 });
+        feedback('medium', ox, oy, '#ffc94a');
+      }
+    }
+  }
+
+  function updateFx(realDt) {
+    // Shake decays in real time so it never freezes off-centre during hit-stop.
+    trauma = Math.max(0, trauma - 1.3 * realDt);
+    shakeT += realDt * 30;
+    flash = Math.max(0, flash - realDt * 3);
+    player.scale += (1 - player.scale) * Math.min(1, realDt * 12);
+    if (Math.abs(player.scale - 1) < 0.002) player.scale = 1;
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i]; p.t += realDt;
+      if (p.t > p.life) { particles.splice(i, 1); continue; }
+      p.x += p.vx * realDt; p.y += p.vy * realDt; p.vx *= 0.94; p.vy *= 0.94;
+    }
+    for (let i = pops.length - 1; i >= 0; i--) { pops[i].t += realDt; if (pops[i].t > 0.8) pops.splice(i, 1); }
+  }
+
+  // ---------- Draw ----------
+  function draw(now) {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.fillStyle = '#0b0d17'; ctx.fillRect(0, 0, W, H);
+
+    const sh = shakeOn ? trauma * trauma : 0;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(0.05 * sh * Math.sin(shakeT * 1.1));
+    ctx.translate(-cx + 14 * sh * Math.sin(shakeT * 1.7), -cy + 10 * sh * Math.sin(shakeT * 2.3));
+
+    // Core
+    const pulse = 1 + 0.06 * Math.sin(now / 300);
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.22 * pulse);
+    g.addColorStop(0, 'rgba(94,231,255,0.9)'); g.addColorStop(0.4, 'rgba(94,231,255,0.25)'); g.addColorStop(1, 'rgba(94,231,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 0.22 * pulse, 0, Math.PI * 2); ctx.fill();
+
+    // Rings
+    for (let i = 0; i < 3; i++) {
+      ctx.strokeStyle = state === 'play' && i === player.ring ? 'rgba(94,231,255,0.35)' : 'rgba(138,147,184,0.18)';
+      ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, ringR(i), 0, Math.PI * 2); ctx.stroke();
+    }
+
+    if (state !== 'menu') {
+      // Obstacles (arcs)
+      for (const o of obstacles) {
+        const alpha = Math.min(1, o.t / 0.5) * Math.min(1, (o.life - o.t) / 0.6);
+        const armed = o.t >= 0.5;
+        ctx.strokeStyle = `rgba(255,77,109,${armed ? alpha : alpha * 0.4})`;
+        ctx.lineWidth = 14; ctx.lineCap = 'round';
+        ctx.shadowColor = '#ff4d6d'; ctx.shadowBlur = armed ? 14 : 0;
+        ctx.beginPath(); ctx.arc(cx, cy, ringR(o.ring), o.a - o.len / 2, o.a + o.len / 2); ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      // Orbs
+      for (const o of orbs) {
+        const [x, y] = polar(ringR(o.ring), o.a);
+        const appear = Math.min(1, o.t / 0.3);
+        const s = (7 + 1.5 * Math.sin(now / 150)) * (appear < 1 ? appear * (1 + 0.3 * Math.sin(appear * Math.PI)) : 1);
+        const blinkOut = o.life - o.t < 1.2 && Math.floor(o.t * 8) % 2 === 0;
+        if (blinkOut) continue;
+        ctx.fillStyle = '#ffc94a'; ctx.shadowColor = '#ffc94a'; ctx.shadowBlur = 16;
+        ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+      // Player trail + body
+      if (state === 'play') {
+        player.trail.forEach(([x, y], i) => {
+          const k = i / player.trail.length;
+          ctx.fillStyle = `rgba(94,231,255,${k * 0.35})`;
+          ctx.beginPath(); ctx.arc(x, y, PLAYER_R * k, 0, Math.PI * 2); ctx.fill();
+        });
+        const [px, py] = polar(player.rv, player.a);
+        ctx.fillStyle = '#e8ecff'; ctx.shadowColor = '#5ee7ff'; ctx.shadowBlur = 20;
+        ctx.beginPath(); ctx.arc(px, py, PLAYER_R * player.scale, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    } else {
+      // Menu: a demo dot circling
+      const [x, y] = polar(ringR(1), now / 600);
+      ctx.fillStyle = '#e8ecff'; ctx.shadowColor = '#5ee7ff'; ctx.shadowBlur = 20;
+      ctx.beginPath(); ctx.arc(x, y, PLAYER_R, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+    }
+
+    // Particles
+    for (const p of particles) {
+      ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // Number pops (overshoot then rise)
+    ctx.font = 'bold 18px system-ui, sans-serif'; ctx.textAlign = 'center';
+    for (const p of pops) {
+      const k = p.t / 0.8, sc = k < 0.2 ? 0.6 + (k / 0.2) * 0.7 : 1.3 - Math.min(0.3, (k - 0.2) * 1.5);
+      ctx.save(); ctx.globalAlpha = 1 - k; ctx.translate(p.x, p.y - 30 * k); ctx.scale(sc, sc);
+      ctx.fillStyle = '#ffc94a'; ctx.fillText(p.text, 0, 0); ctx.restore();
+    }
+    ctx.restore();
+
+    if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash * 0.35})`; ctx.fillRect(0, 0, W, H); }
+
+    $score.textContent = state === 'menu' ? '' : Math.floor(score);
+    $combo.textContent = state === 'play' && combo > 1 ? 'Kombo x' + combo : '';
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const realDt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (timeScale !== 1 && now >= hitStopUntil) timeScale = 1;   // safety net if a tab was backgrounded
+    update(realDt * timeScale);
+    updateFx(realDt);
+    draw(now);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // Test hook (headless checks)
+  window.__yorunge = { get state() { return state; }, get score() { return score; }, get timeScale() { return timeScale; }, jump };
+})();
+</script>
+</body>
+</html>
