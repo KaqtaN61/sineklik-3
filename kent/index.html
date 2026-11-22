@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Kent Kurucu</title>
+<style>
+  :root { --panel:rgba(16,20,32,.88); --line:#2b3350; --fg:#eef1fb; --muted:#9aa3c3; --acc:#4ade80;
+          --r:#4ade80; --c:#60a5fa; --i:#fbbf24; --bad:#f87171; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { height:100%; overflow:hidden; background:#9ecbe8; color:var(--fg);
+    font-family:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size:14px;
+    user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; }
+  canvas { display:block; touch-action:none; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; backdrop-filter:blur(6px); }
+  #top { position:fixed; top:8px; left:8px; right:8px; display:flex; flex-wrap:wrap; gap:8px; align-items:stretch; pointer-events:none; }
+  #top > * { pointer-events:auto; }
+  .stat { padding:6px 12px; display:flex; flex-direction:column; justify-content:center; min-width:84px; }
+  .stat small { color:var(--muted); font-size:11px; }
+  .stat b { font-size:16px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .neg { color:var(--bad); } .pos { color:var(--acc); }
+  #rci { display:flex; gap:6px; align-items:flex-end; padding:6px 10px; }
+  .bar { width:12px; height:38px; background:#0b0e18; border-radius:3px; position:relative; overflow:hidden; }
+  .bar i { position:absolute; left:0; right:0; bottom:50%; background:currentColor; }
+  .bar::after { content:""; position:absolute; left:0; right:0; top:50%; height:1px; background:#39405c; }
+  .barl { font-size:10px; text-align:center; color:var(--muted); margin-top:2px; }
+  .ctl { display:flex; gap:4px; align-items:center; padding:4px 6px; }
+  .ctl button, #tools button, .mini { background:#1d2440; color:var(--fg); border:1px solid #333c63; border-radius:7px;
+    cursor:pointer; font:inherit; }
+  .ctl button { width:32px; height:30px; font-size:13px; }
+  .ctl button.on { background:#2f6f4f; border-color:#4ade80; }
+  #taxv { min-width:38px; text-align:center; font-variant-numeric:tabular-nums; }
+  #tools { position:fixed; left:50%; transform:translateX(-50%); bottom:10px; max-width:calc(100vw - 16px);
+    display:flex; gap:6px; padding:6px; overflow-x:auto; scrollbar-width:none; }
+  #tools::-webkit-scrollbar { display:none; }
+  #tools button { flex:0 0 auto; width:68px; height:62px; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:2px; font-size:11px; line-height:1.1; }
+  #tools button .ic { font-size:22px; }
+  #tools button .cost { color:var(--muted); font-size:10px; }
+  #tools button.on { background:#24543c; border-color:var(--acc); }
+  #info { position:fixed; left:8px; bottom:86px; padding:10px 12px; max-width:280px; line-height:1.5; display:none; }
+  #warn { position:fixed; right:8px; bottom:86px; padding:8px 12px; max-width:300px; color:#fde68a; display:none; line-height:1.4; }
+  #toast { position:fixed; top:84px; left:50%; transform:translateX(-50%); padding:8px 14px; border-radius:8px;
+    background:rgba(127,29,29,.92); color:#fff; opacity:0; transition:opacity .25s; pointer-events:none; text-align:center; }
+  #toast.ok { background:rgba(22,101,52,.92); }
+  #hint { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); padding:18px 20px; width:min(420px, calc(100vw - 32px)); line-height:1.55; }
+  #hint h2 { margin-bottom:8px; font-size:20px; }
+  #hint ol { margin:8px 0 12px 20px; }
+  #hint .mini { padding:8px 14px; }
+  #help { color:var(--muted); font-size:12px; }
+  @media (max-width:640px) { .stat { min-width:70px; padding:4px 8px; } .stat b { font-size:14px; } #info,#warn { bottom:84px; max-width:calc(100vw - 16px); } #warn { left:8px; right:auto; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="top">
+  <div class="panel stat"><small>Bütçe</small><b id="money">₺0</b><small id="flow">—</small></div>
+  <div class="panel stat"><small>Nüfus</small><b id="pop">0</b><small id="jobs">İş: 0</small></div>
+  <div class="panel stat"><small>Tarih</small><b id="date">Oca 1</b><small id="util">⚡0/0 💧0/0</small></div>
+  <div class="panel" id="rci" title="Talep: Konut / Ticari / Sanayi">
+    <div><div class="bar" style="color:var(--r)"><i id="dR"></i></div><div class="barl">K</div></div>
+    <div><div class="bar" style="color:var(--c)"><i id="dC"></i></div><div class="barl">T</div></div>
+    <div><div class="bar" style="color:var(--i)"><i id="dI"></i></div><div class="barl">S</div></div>
+  </div>
+  <div class="panel ctl" title="Oyun hızı (Space: duraklat)">
+    <button data-speed="0">⏸</button><button data-speed="1">▶</button><button data-speed="2">▶▶</button><button data-speed="3">⏩</button>
+  </div>
+  <div class="panel ctl" title="Vergi oranı: yüksek vergi talebi düşürür">
+    <small style="color:var(--muted);padding:0 4px">Vergi</small>
+    <button id="taxm">−</button><b id="taxv">%9</b><button id="taxp">+</button>
+  </div>
+  <div class="panel ctl">
+    <button id="save" title="Kaydet">💾</button><button id="load" title="Yükle">📂</button><button id="new" title="Yeni harita">🆕</button>
+  </div>
+</div>
+
+<div id="tools" class="panel"></div>
+<div id="info" class="panel"></div>
+<div id="warn" class="panel"></div>
+<div id="toast"></div>
+
+<div id="hint" class="panel">
+  <h2>Kent Kurucu'ya hoş geldin</h2>
+  <ol>
+    <li><b>🛣️ Yol</b> çiz (sürükle).</li>
+    <li><b>⚡ Santral</b> ve nehir kenarına <b>💧 Su Pompası</b> kur, ikisini de yola bağla.</li>
+    <li>Yolların yanına <b>🏠 Konut</b> ve <b>🏭 Sanayi</b> bölgesi çiz. Nüfus artınca <b>🏬 Ticari</b> ekle.</li>
+    <li>Talep çubuklarını (K/T/S) izle, <b>🌳 Park</b> ile arazi değerini yükselt.</li>
+  </ol>
+  <p id="help">Kamera: sağ tık sürükle = döndür, tekerlek = yakınlaştır, ✋ aracı veya ok tuşları = kaydır. Telefonda iki parmak = döndür/yakınlaştır.<br>Kısayollar: 1–0 araçlar, Space duraklat, Esc iptal.</p>
+  <p style="margin-top:12px"><button class="mini" id="hintClose">Başla</button></p>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { MapControls } from 'three/addons/controls/MapControls.js';
+
+// ====================== Constants ======================
+const N = 64, HALF = N / 2;
+const T_EMPTY = 0, T_WATER = 1, T_ROAD = 2, T_SVC = 3;
+const Z_NONE = 0, Z_R = 1, Z_C = 2, Z_I = 3;
+const RES = [0, 4, 14, 40], COMJ = [0, 6, 14, 30], INDJ = [0, 10, 20, 35];
+const ROAD_COST = 10, ZONE_REACH = 3;
+const MONTHS = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+const SPEEDS = [0, 1, 2, 4], TICK = 2.2;
+const SVC = {
+  power: { name: 'Elektrik Santrali', size: 2, cost: 8000, upkeep: 350, cap: 220 },
+  water: { name: 'Su Pompası', size: 1, cost: 5000, upkeep: 200, cap: 180 },
+  park:  { name: 'Park', size: 1, cost: 800, upkeep: 40 },
+};
+const TOOLS = [
+  ['hand', '✋', 'Gezin', ''], ['info', '🔍', 'Bilgi', ''], ['road', '🛣️', 'Yol', '₺10/kare'],
+  ['res', '🏠', 'Konut', 'bölge'], ['com', '🏬', 'Ticari', 'bölge'], ['ind', '🏭', 'Sanayi', 'bölge'],
+  ['power', '⚡', 'Santral', '₺8.000'], ['water', '💧', 'Su Pompası', '₺5.000'], ['park', '🌳', 'Park', '₺800'],
+  ['bulldoze', '🚜', 'Yık', ''],
+];
+const ZONE_OF = { res: Z_R, com: Z_C, ind: Z_I };
+const ZONE_NAME = ['', 'Konut', 'Ticari', 'Sanayi'];
+const ZONE_COLOR = [0, 0x4ade80, 0x60a5fa, 0xfbbf24];
+
+const clamp = (v, a = -1, b = 1) => Math.max(a, Math.min(b, v));
+const fmt = n => Math.round(n).toLocaleString('tr-TR');
+const hash = (x, z, k = 0) => {
+  let h = (Math.imul(x, 374761393) + Math.imul(z, 668265263) + Math.imul(k, 1013904223)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+};
+const idx = (x, z) => z * N + x;
+const inb = (x, z) => x >= 0 && z >= 0 && x < N && z < N;
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
+};
+
+// ====================== State ======================
+let type, zone, lvl, tree, svcAt, served;
+let services = new Map(), nextSvc = 1;
+let money, month, tax, speed = 1;
+let stats = { pop: 0, jC: 0, jI: 0, unserved: 0 }, demand = { r: 0, c: 0, i: 0 };
+let net = { pUsed: 0, pCap: 0, wUsed: 0, wCap: 0, pR: null, wR: null };
+let lastIncome = 0, lastExpense = 0;
+
+// ====================== Three.js setup ======================
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9ecbe8);
+scene.fog = new THREE.Fog(0x9ecbe8, 70, 160);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.5, 400);
+camera.position.set(-14, 34, 34);
+
+const controls = new MapControls(camera, renderer.domElement);
+controls.target.set(-6, 0, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.12;
+controls.minDistance = 8; controls.maxDistance = 95;
+controls.maxPolarAngle = 1.25;
+controls.listenToKeyEvents(window);
+controls.keyPanSpeed = 18;
+
+scene.add(new THREE.HemisphereLight(0xe6f2ff, 0x5a6b45, 1.1));
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.0);
+sun.position.set(28, 48, 18);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -42, right: 42, top: 42, bottom: -42, near: 1, far: 150 });
+sun.shadow.bias = -0.0006;
+scene.add(sun);
+
+const outer = new THREE.Mesh(new THREE.PlaneGeometry(500, 500).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x7aa262 }));
+outer.position.y = -0.02; scene.add(outer);
+const groundData = new Uint8Array(N * N * 4);
+const groundTex = new THREE.DataTexture(groundData, N, N);
+groundTex.magFilter = THREE.NearestFilter; groundTex.colorSpace = THREE.SRGBColorSpace;
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(N, N).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: groundTex }));
+ground.receiveShadow = true; scene.add(ground);
+
+const grid = new THREE.GridHelper(N, N, 0x000000, 0x000000);
+grid.material.transparent = true; grid.material.opacity = 0.12; grid.position.y = 0.015; scene.add(grid);
+
+function mkInst(geo, mat, max, shadow = true) {
+  const m = new THREE.InstancedMesh(geo, mat, max);
+  m.count = 0; m.frustumCulled = false;
+  m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  m.setColorAt(0, new THREE.Color(1, 1, 1));
+  m.castShadow = shadow; m.receiveShadow = true;
+  scene.add(m); return m;
+}
+const roadMesh = mkInst(new THREE.BoxGeometry(1, 0.06, 1).translate(0, 0.03, 0), new THREE.MeshLambertMaterial({ color: 0x45484f }), N * N, false);
+const lineMesh = mkInst(new THREE.BoxGeometry(1, 0.01, 1).translate(0, 0.065, 0), new THREE.MeshBasicMaterial({ color: 0xe9e2c8 }), N * N * 2, false);
+const zoneMesh = mkInst(new THREE.BoxGeometry(0.9, 0.03, 0.9).translate(0, 0.015, 0), new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }), N * N, false);
+const bodyMesh = mkInst(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 }), N * N * 2);
+const roofMesh = mkInst(new THREE.ConeGeometry(0.7071, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }), N * N);
+const treeMesh = mkInst(new THREE.ConeGeometry(0.32, 1, 6).translate(0, 0.5, 0), new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), N * N * 2);
+const prevMesh = mkInst(new THREE.BoxGeometry(1, 0.12, 1).translate(0, 0.06, 0), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false }), N * N, false);
+
+const _M = new THREE.Matrix4(), _Q = new THREE.Quaternion(), _P = new THREE.Vector3(), _S = new THREE.Vector3(), _C = new THREE.Color(), _G = new THREE.Color(0x6b6f7a);
+function put(mesh, n, x, y, z, sx, sy, sz, color) {
+  _P.set(x, y, z); _S.set(sx, sy, sz); _M.compose(_P, _Q, _S);
+  mesh.setMatrixAt(n, _M); mesh.setColorAt(n, _C.set(color));
+}
+function pick(arr, r) { return arr[Math.floor(r * arr.length) % arr.length]; }
+const wx = x => x - HALF + 0.5;
+
+// ====================== Map generation ======================
+function newGame(seed = (Math.random() * 1e9) | 0) {
+  type = new Uint8Array(N * N); zone = new Uint8Array(N * N); lvl = new Uint8Array(N * N);
+  tree = new Uint8Array(N * N); served = new Uint8Array(N * N); svcAt = new Int32Array(N * N).fill(-1);
+  for (const s of services.values()) scene.remove(s.group);
+  services.clear(); nextSvc = 1;
+  const p1 = hash(seed, 1) * 6, p2 = hash(seed, 2) * 6, p3 = hash(seed, 3) * 6, p4 = hash(seed, 4) * 6;
+  for (let z = 0; z < N; z++) {
+    const c = N * 0.74 + Math.sin(z * 0.11 + p1) * 4 + Math.sin(z * 0.043 + p2) * 3;
+    const w = 1.7 + Math.sin(z * 0.2 + p3) * 0.5;
+    for (let x = 0; x < N; x++) if (Math.abs(x + 0.5 - c) < w) type[idx(x, z)] = T_WATER;
+  }
+  for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
+    const i = idx(x, z);
+    if (type[i] !== T_EMPTY) continue;
+    const f = Math.sin(x * 0.21 + p3) * Math.sin(z * 0.17 + p4) + Math.sin((x + z) * 0.09 + p1) * 0.6;
+    if (f > 0.55 && hash(x, z, seed) < 0.8) tree[i] = 1;
+  }
+  money = 60000; month = 0; tax = 9;
+  paintGround(); refresh();
+}
+
+function paintGround() {
+  for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
+    const i = idx(x, z), j = ((N - 1 - z) * N + x) * 4, v = hash(x, z, 7) * 10 - 5;
+    let c;
+    if (type[i] === T_WATER) c = [58 + v, 128 + v, 186];
+    else if (nearType(x, z, T_WATER, 1)) c = [196 + v, 186 + v, 138];
+    else c = [104 + v, 158 + v, 78 + v];
+    groundData.set([c[0], c[1], c[2], 255], j);
+  }
+  groundTex.needsUpdate = true;
+}
+function nearType(x, z, t, r) {
+  for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+    const X = x + dx, Z = z + dz;
+    if (inb(X, Z) && type[idx(X, Z)] === t) return true;
+  }
+  return false;
+}
+
+// ====================== Rendering of city state ======================
+function rebuild() {
+  let nr = 0, nl = 0, nz = 0, nb = 0, nf = 0, nt = 0;
+  for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
+    const i = idx(x, z), X = wx(x), Z = wx(z);
+    if (type[i] === T_ROAD) {
+      put(roadMesh, nr++, X, 0, Z, 1, 1, 1, 0x45484f);
+      const e = x + 1 < N && type[i + 1] === T_ROAD, w = x > 0 && type[i - 1] === T_ROAD;
+      const s = z + 1 < N && type[i + N] === T_ROAD, n = z > 0 && type[i - N] === T_ROAD;
+      const links = e + w + s + n;
+      if (links <= 2) {   // dashed centre line on straight pieces
+        if ((e || w) && !(s || n)) put(lineMesh, nl++, X, 0, Z, 0.4, 1, 0.06, 0xe9e2c8);
+        if ((s || n) && !(e || w)) put(lineMesh, nl++, X, 0, Z, 0.06, 1, 0.4, 0xe9e2c8);
+      }
+      continue;
+    }
+    if (tree[i] && !lvl[i]) {
+      const r = hash(x, z, 3), s = 0.7 + r * 0.6;
+      put(treeMesh, nt++, X + (r - 0.5) * 0.4, 0, Z + (hash(x, z, 4) - 0.5) * 0.4, s, s * (1 + r * 0.5), s, pick([0x2f7d32, 0x3b8f3e, 0x276a2b], r));
+      if (r > 0.45) put(treeMesh, nt++, X - (r - 0.5) * 0.6, 0, Z - 0.25, s * 0.7, s * 0.8, s * 0.7, 0x358a38);
+    }
+    if (type[i] !== T_EMPTY || !zone[i]) continue;
+    if (!lvl[i]) { put(zoneMesh, nz++, X, 0, Z, 1, 1, 1, ZONE_COLOR[zone[i]]); continue; }
+    const L = lvl[i], r = hash(x, z, 1), r2 = hash(x, z, 2), ok = served[i] === 3;
+    let w, h, col;
+    if (zone[i] === Z_R) {
+      if (L === 1) { w = 0.6; h = 0.45 + r * 0.15; col = pick([0xf2e6d0, 0xe8d3b9, 0xf3efe6, 0xdcc6a8], r2); }
+      else if (L === 2) { w = 0.78; h = 1.1 + r * 0.6; col = pick([0xd8cfc4, 0xc9b8a6, 0xbfc7cf, 0xe3d5c3], r2); }
+      else { w = 0.8; h = 2.6 + r * 2.2; col = pick([0xa9b8c9, 0xc2c9d1, 0x9aa7b5, 0xd0c4b6], r2); }
+    } else if (zone[i] === Z_C) {
+      if (L === 1) { w = 0.8; h = 0.7 + r * 0.2; }
+      else if (L === 2) { w = 0.85; h = 1.7 + r * 1.0; }
+      else { w = 0.88; h = 3.4 + r * 3.0; }
+      col = pick([0x7fb3d5, 0x5d9cc7, 0x88c0c8, 0x9cc3e6], r2);
+    } else {
+      if (L === 1) { w = 0.85; h = 0.6 + r * 0.2; }
+      else if (L === 2) { w = 0.9; h = 0.9 + r * 0.3; }
+      else { w = 0.92; h = 1.3 + r * 0.4; }
+      col = pick([0xc9a66b, 0xb38b59, 0xa89a82, 0xbca27a], r2);
+    }
+    _C.set(col); if (!ok) _C.lerp(_G, 0.65);
+    _P.set(X, 0, Z); _S.set(w, h, w); _M.compose(_P, _Q, _S);
+    bodyMesh.setMatrixAt(nb, _M); bodyMesh.setColorAt(nb++, _C);
+    if (zone[i] === Z_R && L === 1) {
+      _C.set(pick([0xb5523b, 0x8c4b3a, 0x6d6d7a, 0x9a3e2e], r)); if (!ok) _C.lerp(_G, 0.65);
+      _P.set(X, h, Z); _S.set(w * 1.1, 0.35, w * 1.1); _M.compose(_P, _Q, _S);
+      roofMesh.setMatrixAt(nf, _M); roofMesh.setColorAt(nf++, _C);
+    }
+    if (zone[i] === Z_I && L >= 2) {   // chimney
+      _C.set(0x8a8f99); if (!ok) _C.lerp(_G, 0.65);
+      _P.set(X + w * 0.28, 0, Z + w * 0.28); _S.set(0.14, h + 0.9 + r * 0.6, 0.14); _M.compose(_P, _Q, _S);
+      bodyMesh.setMatrixAt(nb, _M); bodyMesh.setColorAt(nb++, _C);
+    }
+  }
+  for (const [m, n] of [[roadMesh, nr], [lineMesh, nl], [zoneMesh, nz], [bodyMesh, nb], [roofMesh, nf], [treeMesh, nt]]) {
+    m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  }
+}
+
+function makeServiceGroup(kind) {
+  const g = new THREE.Group();
+  const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 });
+  const add = (geo, c, x, y, z) => { const m = new THREE.Mesh(geo, mat(c)); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; g.add(m); return m; };
+  if (kind === 'power') {
+    add(new THREE.BoxGeometry(1.8, 0.1, 1.8), 0x9aa0a8, 0, 0.05, 0);
+    add(new THREE.BoxGeometry(1.1, 0.9, 1.3), 0x5b6270, -0.25, 0.55, 0);
+    for (const dz of [-0.45, 0.4]) {
+      add(new THREE.CylinderGeometry(0.22, 0.3, 2.4, 14), 0xd8dce2, 0.5, 1.2, dz);
+      add(new THREE.CylinderGeometry(0.225, 0.225, 0.25, 14), 0xc0392b, 0.5, 2.2, dz);
+    }
+  } else if (kind === 'water') {
+    add(new THREE.BoxGeometry(0.9, 0.12, 0.9), 0x9aa0a8, 0, 0.06, 0);
+    add(new THREE.CylinderGeometry(0.08, 0.08, 1.0, 6), 0x6b7280, 0, 0.6, 0);
+    add(new THREE.CylinderGeometry(0.38, 0.34, 0.55, 16), 0x3b82f6, 0, 1.35, 0);
+    add(new THREE.ConeGeometry(0.4, 0.25, 16), 0x1d4ed8, 0, 1.75, 0);
+  } else {
+    add(new THREE.BoxGeometry(0.96, 0.05, 0.96), 0x4caf50, 0, 0.025, 0);
+    add(new THREE.BoxGeometry(0.12, 0.02, 0.96), 0xd6c8a0, 0, 0.06, 0);
+    for (const [x, z, s] of [[-0.28, -0.25, 1], [0.3, 0.22, 0.8], [-0.25, 0.3, 0.7]]) {
+      add(new THREE.CylinderGeometry(0.04, 0.05, 0.25, 6), 0x6d4c2f, x, 0.15, z);
+      add(new THREE.SphereGeometry(0.2 * s, 8, 6), 0x2e8b3a, x, 0.4, z);
+    }
+  }
+  return g;
+}
+
+// ====================== Simulation ======================
+function bfs(kind) {
+  const reach = new Uint8Array(N * N), q = [];
+  for (const s of services.values()) {
+    if (s.kind !== kind) continue;
+    for (let dz = -1; dz <= s.size; dz++) for (let dx = -1; dx <= s.size; dx++) {
+      const corner = (dx === -1 || dx === s.size) && (dz === -1 || dz === s.size);
+      const X = s.x + dx, Z = s.z + dz;
+      if (corner || !inb(X, Z)) continue;
+      const j = idx(X, Z);
+      if (type[j] === T_ROAD && !reach[j]) { reach[j] = 1; q.push(j); }
+    }
+  }
+  while (q.length) {
+    const j = q.pop(), x = j % N, z = (j / N) | 0;
+    for (const [X, Z] of [[x + 1, z], [x - 1, z], [x, z + 1], [x, z - 1]]) {
+      if (!inb(X, Z)) continue;
+      const k = idx(X, Z);
+      if (type[k] === T_ROAD && !reach[k]) { reach[k] = 1; q.push(k); }
+    }
+  }
+  return reach;
+}
+function nearMask(i, mask, r = ZONE_REACH) {
+  const x = i % N, z = (i / N) | 0;
+  for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+    const X = x + dx, Z = z + dz;
+    if (inb(X, Z) && mask[idx(X, Z)]) return true;
+  }
+  return false;
+}
+function roadNear(i) { return nearMask(i, type.map(t => t === T_ROAD ? 1 : 0)); }
+
+function computeNetworks() {
+  const pR = bfs('power'), wR = bfs('water');
+  let pCap = 0, wCap = 0;
+  for (const s of services.values()) { if (s.kind === 'power') pCap += SVC.power.cap; if (s.kind === 'water') wCap += SVC.water.cap; }
+  let pUsed = 0, wUsed = 0;
+  served.fill(0);
+  for (let i = 0; i < N * N; i++) {
+    const L = lvl[i]; if (!L) continue;
+    if (pUsed + L <= pCap && nearMask(i, pR)) { served[i] |= 1; pUsed += L; }
+    if (wUsed + L <= wCap && nearMask(i, wR)) { served[i] |= 2; wUsed += L; }
+  }
+  net = { pUsed, pCap, wUsed, wCap, pR, wR };
+}
+function computeStats() {
+  let pop = 0, jC = 0, jI = 0, unserved = 0;
+  for (let i = 0; i < N * N; i++) {
+    const L = lvl[i]; if (!L) continue;
+    if (served[i] !== 3) { unserved++; continue; }
+    if (zone[i] === Z_R) pop += RES[L]; else if (zone[i] === Z_C) jC += COMJ[L]; else jI += INDJ[L];
+  }
+  stats = { pop, jC, jI, unserved };
+}
+function computeDemand() {
+  const { pop, jC, jI } = stats, tf = (10 - tax) * 0.04;
+  demand.r = clamp((jC + jI - pop * 0.55 + 40) / Math.max(60, pop * 0.25) + tf);
+  demand.c = clamp((pop * 0.22 - jC) / Math.max(25, pop * 0.1) + tf);
+  demand.i = clamp((pop * 0.33 - jI + 30) / Math.max(40, pop * 0.15) + tf);
+}
+function landValue(i) {
+  const x = i % N, z = (i / N) | 0;
+  let v = 0.3, parks = 0, inds = 0, coms = 0;
+  for (let dz = -5; dz <= 5; dz++) for (let dx = -5; dx <= 5; dx++) {
+    const X = x + dx, Z = z + dz; if (!inb(X, Z)) continue;
+    const j = idx(X, Z), d = Math.max(Math.abs(dx), Math.abs(dz));
+    if (svcAt[j] >= 0 && services.get(svcAt[j])?.kind === 'park') parks++;
+    if (d <= 4 && zone[j] === Z_I && lvl[j]) inds++;
+    if (d <= 3 && zone[j] === Z_C && lvl[j]) coms++;
+  }
+  v += Math.min(parks * 0.12, 0.45) + Math.min(coms * 0.02, 0.12);
+  if (zone[i] === Z_R) v -= Math.min(inds * 0.06, 0.4);
+  if (nearType(x, z, T_WATER, 3)) v += 0.1;
+  return clamp(v, 0, 1);
+}
+
+function simTick() {
+  computeNetworks(); computeStats(); computeDemand();
+  const D = [0, demand.r, demand.c, demand.i];
+  let pLeft = net.pCap - net.pUsed, wLeft = net.wCap - net.wUsed;
+  // Growth on zoned, connected, serviced land
+  const cand = [[], [], [], []];
+  for (let i = 0; i < N * N; i++) {
+    if (zone[i] && type[i] === T_EMPTY && !lvl[i] && nearMask(i, net.pR) && nearMask(i, net.wR)) cand[zone[i]].push(i);
+  }
+  for (let zt = 1; zt <= 3; zt++) {
+    const d = D[zt], c = cand[zt];
+    if (d <= 0.05) continue;
+    let n = Math.min(c.length, Math.ceil(d * 5 * (0.5 + Math.random())));
+    while (n-- > 0 && pLeft > 0 && wLeft > 0) {
+      const k = (Math.random() * c.length) | 0, i = c[k];
+      c[k] = c[c.length - 1]; c.pop();
+      lvl[i] = 1; tree[i] = 0; pLeft--; wLeft--;
+    }
+  }
+  // Upgrades & decline
+  for (let i = 0; i < N * N; i++) {
+    const L = lvl[i]; if (!L) continue;
+    const d = D[zone[i]];
+    if (L < 3 && served[i] === 3 && d > 0.15 && pLeft > 0 && wLeft > 0) {
+      const need = L === 1 ? 0.35 : 0.6;
+      if (landValue(i) >= need && Math.random() < d * 0.05) { lvl[i]++; pLeft--; wLeft--; }
+    } else if (d < -0.4 && Math.random() < 0.02) lvl[i]--;
+  }
+  // Budget
+  computeNetworks(); computeStats();
+  let roads = 0; for (let i = 0; i < N * N; i++) if (type[i] === T_ROAD) roads++;
+  lastIncome = Math.round((stats.pop * 1.5 + stats.jC * 1.5 + stats.jI * 1.2) * tax / 10);
+  lastExpense = roads;
+  for (const s of services.values()) lastExpense += SVC[s.kind].upkeep;
+  money += lastIncome - lastExpense;
+  month++;
+  if (month % 12 === 0) save(true);
+  rebuild(); hud();
+}
+
+function refresh() { computeNetworks(); computeStats(); computeDemand(); rebuild(); hud(); }
+
+// ====================== Tools ======================
+let tool = 'hand', dragStart = null, hover = null, pointers = new Set();
+const $tools = document.getElementById('tools');
+for (const [id, ic, name, cost] of TOOLS) {
+  const b = document.createElement('button');
+  b.dataset.tool = id;
+  b.innerHTML = `<span class="ic">${ic}</span><span>${name}</span>${cost ? `<span class="cost">${cost}</span>` : ''}`;
+  b.onclick = () => setTool(id);
+  $tools.appendChild(b);
+}
+function setTool(t) {
+  tool = t; dragStart = null;
+  for (const b of $tools.children) b.classList.toggle('on', b.dataset.tool === t);
+  controls.mouseButtons.LEFT = t === 'hand' ? THREE.MOUSE.PAN : null;
+  controls.touches.ONE = t === 'hand' ? THREE.TOUCH.PAN : null;
+  grid.visible = t !== 'hand';
+  if (t !== 'info') document.getElementById('info').style.display = 'none';
+  updatePreview();
+}
+
+function cellsFor(a, b) {
+  const out = [];
+  if (tool === 'road') {
+    const hFirst = Math.abs(b.x - a.x) >= Math.abs(b.z - a.z);
+    const corner = hFirst ? { x: b.x, z: a.z } : { x: a.x, z: b.z };
+    const seg = (p, q) => {
+      const dx = Math.sign(q.x - p.x), dz = Math.sign(q.z - p.z);
+      let x = p.x, z = p.z; out.push(idx(x, z));
+      while (x !== q.x || z !== q.z) { x += dx; z += dz; out.push(idx(x, z)); }
+    };
+    seg(a, corner); seg(corner, b);
+    return [...new Set(out)];
+  }
+  const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), z0 = Math.min(a.z, b.z), z1 = Math.max(a.z, b.z);
+  for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) out.push(idx(x, z));
+  return out;
+}
+function footprint(c, size) {
+  const out = [];
+  for (let dz = 0; dz < size; dz++) for (let dx = 0; dx < size; dx++) {
+    if (!inb(c.x + dx, c.z + dz)) return null;
+    out.push(idx(c.x + dx, c.z + dz));
+  }
+  return out;
+}
+function validCell(i, roadMask) {
+  if (tool === 'road') return type[i] === T_EMPTY || type[i] === T_ROAD;
+  if (ZONE_OF[tool]) return type[i] === T_EMPTY && nearMask(i, roadMask);
+  if (tool === 'bulldoze') return type[i] === T_ROAD || type[i] === T_SVC || zone[i] > 0 || tree[i] > 0;
+  return type[i] === T_EMPTY;
+}
+function previewList() {
+  if (!hover || tool === 'hand' || tool === 'info') return [];
+  const roadMask = ZONE_OF[tool] ? type.map(t => t === T_ROAD ? 1 : 0) : null;
+  if (SVC[tool]) {
+    const fp = footprint(hover, SVC[tool].size);
+    if (!fp) return [];
+    let ok = fp.every(i => type[i] === T_EMPTY);
+    if (tool === 'water') ok = ok && fp.some(i => nearType(i % N, (i / N) | 0, T_WATER, 1));
+    return fp.map(i => ({ i, ok }));
+  }
+  return cellsFor(dragStart || hover, hover).map(i => ({ i, ok: validCell(i, roadMask) }));
+}
+function updatePreview() {
+  const list = previewList();
+  let n = 0;
+  for (const { i, ok } of list) {
+    const color = !ok ? 0xf87171 : tool === 'bulldoze' ? 0xfb923c : ZONE_OF[tool] ? ZONE_COLOR[ZONE_OF[tool]] : 0x4ade80;
+    put(prevMesh, n++, wx(i % N), 0, wx((i / N) | 0), 1, 1, 1, color);
+  }
+  prevMesh.count = n; prevMesh.instanceMatrix.needsUpdate = true; if (prevMesh.instanceColor) prevMesh.instanceColor.needsUpdate = true;
+  if (tool === 'road' && dragStart && list.length) {
+    const cost = list.filter(c => c.ok && type[c.i] !== T_ROAD).length * ROAD_COST;
+    showToast(`Yol maliyeti: ₺${fmt(cost)}`, cost <= money, 600);
+  }
+}
+
+function apply() {
+  const list = previewList();
+  if (!list.length) return;
+  if (tool === 'road') {
+    const cells = list.filter(c => c.ok && type[c.i] !== T_ROAD).map(c => c.i);
+    const cost = cells.length * ROAD_COST;
+    if (cost > money) return showToast('Yetersiz bütçe!');
+    for (const i of cells) { type[i] = T_ROAD; zone[i] = 0; lvl[i] = 0; tree[i] = 0; }
+    money -= cost;
+    if (list.some(c => !c.ok)) showToast('Su veya bina üzerinden yol geçemez, o kareler atlandı.');
+  } else if (ZONE_OF[tool]) {
+    const z = ZONE_OF[tool];
+    let any = false;
+    for (const { i, ok } of list) if (ok) { if (zone[i] !== z) lvl[i] = 0; zone[i] = z; any = true; }
+    if (!any) showToast('Bölgeler yola en fazla 3 kare uzaklıkta olmalı.');
+  } else if (SVC[tool]) {
+    const def = SVC[tool];
+    if (!list[0].ok) return showToast(tool === 'water' ? 'Su pompası boş araziye, nehir kenarına kurulmalı.' : 'Buraya inşa edilemez.');
+    if (def.cost > money) return showToast('Yetersiz bütçe!');
+    const id = nextSvc++, g = makeServiceGroup(tool);
+    g.position.set(hover.x - HALF + def.size / 2, 0, hover.z - HALF + def.size / 2);
+    scene.add(g);
+    services.set(id, { id, kind: tool, x: hover.x, z: hover.z, size: def.size, group: g });
+    for (const { i } of list) { type[i] = T_SVC; svcAt[i] = id; zone[i] = 0; lvl[i] = 0; tree[i] = 0; }
+    money -= def.cost;
+    showToast(`${def.name} kuruldu${tool !== 'park' ? ' — yola bağlamayı unutma' : ''}.`, true);
+  } else if (tool === 'bulldoze') {
+    for (const { i, ok } of list) {
+      if (!ok) continue;
+      if (type[i] === T_SVC) removeService(svcAt[i]);
+      else if (type[i] === T_ROAD) type[i] = T_EMPTY;
+      zone[i] = 0; lvl[i] = 0; tree[i] = 0;
+    }
+  }
+  refresh();
+}
+function removeService(id) {
+  const s = services.get(id); if (!s) return;
+  scene.remove(s.group);
+  for (let i = 0; i < N * N; i++) if (svcAt[i] === id) { svcAt[i] = -1; type[i] = T_EMPTY; }
+  services.delete(id);
+}
+
+function showInfo(c) {
+  const el = document.getElementById('info'), i = idx(c.x, c.z);
+  let h;
+  if (type[i] === T_WATER) h = '<b>Nehir</b><br>Su pompaları kıyıya kurulur.';
+  else if (type[i] === T_ROAD) h = `<b>Yol</b><br>Elektrik şebekesi: ${net.pR[i] ? '✓' : '✗'} · Su şebekesi: ${net.wR[i] ? '✓' : '✗'}`;
+  else if (type[i] === T_SVC) {
+    const s = services.get(svcAt[i]), d = SVC[s.kind];
+    h = `<b>${d.name}</b><br>Bakım: ₺${fmt(d.upkeep)}/ay`;
+    if (s.kind === 'power') h += `<br>Şehir geneli: ${net.pUsed}/${net.pCap} birim kullanılıyor`;
+    if (s.kind === 'water') h += `<br>Şehir geneli: ${net.wUsed}/${net.wCap} birim kullanılıyor`;
+    if (s.kind === 'park') h += '<br>Çevresindeki arazi değerini artırır.';
+  } else if (zone[i] && lvl[i]) {
+    const L = lvl[i], who = zone[i] === Z_R ? `${RES[L]} sakin` : `${(zone[i] === Z_C ? COMJ : INDJ)[L]} iş`;
+    h = `<b>${ZONE_NAME[zone[i]]} binası · Seviye ${L}</b><br>${who}<br>Elektrik: ${served[i] & 1 ? '✓' : '✗'} · Su: ${served[i] & 2 ? '✓' : '✗'}<br>Arazi değeri: %${Math.round(landValue(i) * 100)}`;
+  } else if (zone[i]) {
+    const pr = nearMask(i, net.pR), wr = nearMask(i, net.wR);
+    h = `<b>${ZONE_NAME[zone[i]]} bölgesi (boş)</b><br>Elektrik bağlantısı: ${pr ? '✓' : '✗'} · Su: ${wr ? '✓' : '✗'}<br>${pr && wr ? 'Talep olduğunda bina yapılacak.' : 'Büyümek için yol ile santral ve su pompasına bağlanmalı.'}`;
+  } else h = `<b>${tree[i] ? 'Orman' : 'Boş arazi'}</b>`;
+  el.innerHTML = h; el.style.display = 'block';
+}
+
+// ====================== Input ======================
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), gplane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
+function cellAt(e) {
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if (!ray.ray.intersectPlane(gplane, hit)) return null;
+  const x = Math.floor(hit.x + HALF), z = Math.floor(hit.z + HALF);
+  return inb(x, z) ? { x, z } : null;
+}
+const cv = renderer.domElement;
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('pointerdown', e => {
+  pointers.add(e.pointerId);
+  if (pointers.size > 1) { dragStart = null; updatePreview(); return; }
+  if (e.button !== 0 || tool === 'hand') return;
+  const c = cellAt(e); if (!c) return;
+  hover = c;
+  if (tool === 'info') return showInfo(c);
+  if (SVC[tool]) { apply(); return; }
+  dragStart = c; updatePreview();
+});
+cv.addEventListener('pointermove', e => {
+  const c = cellAt(e);
+  if (!c) return;
+  if (!hover || c.x !== hover.x || c.z !== hover.z) { hover = c; updatePreview(); }
+});
+const endPointer = e => {
+  pointers.delete(e.pointerId);
+  if (dragStart && e.type === 'pointerup') { apply(); }
+  dragStart = null; updatePreview();
+};
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const k = '1234567890'.indexOf(e.key);
+  if (k >= 0 && TOOLS[k]) setTool(TOOLS[k][0]);
+  if (e.code === 'Space') { e.preventDefault(); setSpeed(speed === 0 ? 1 : 0); }
+  if (e.key === 'Escape') { if (dragStart) { dragStart = null; updatePreview(); } else setTool('hand'); }
+});
+
+// ====================== HUD ======================
+const $ = id => document.getElementById(id);
+let toastTimer;
+function showToast(msg, ok = false, ms = 2200) {
+  const t = $('toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.opacity = 1;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.opacity = 0, ms);
+}
+function setBar(el, d) {
+  const h = Math.abs(d) * 50;
+  el.style.height = h + '%';
+  el.style.bottom = d >= 0 ? '50%' : (50 - h) + '%';
+  el.style.opacity = d >= 0 ? 1 : 0.5;
+}
+function hud() {
+  $('money').textContent = '₺' + fmt(money);
+  $('money').className = money < 0 ? 'neg' : '';
+  const flow = lastIncome - lastExpense;
+  $('flow').innerHTML = month ? `<span class="${flow >= 0 ? 'pos' : 'neg'}">${flow >= 0 ? '+' : ''}${fmt(flow)}/ay</span>` : 'aylık gelir';
+  $('pop').textContent = fmt(stats.pop);
+  $('jobs').textContent = `İş: ${fmt(stats.jC + stats.jI)}`;
+  $('date').textContent = `${MONTHS[month % 12]} · Yıl ${Math.floor(month / 12) + 1}`;
+  $('util').textContent = `⚡${net.pUsed}/${net.pCap} 💧${net.wUsed}/${net.wCap}`;
+  setBar($('dR'), demand.r); setBar($('dC'), demand.c); setBar($('dI'), demand.i);
+  $('taxv').textContent = '%' + tax;
+  const w = [];
+  if (!services.size) w.push('Şehrin elektrik ve suya ihtiyacı var: ⚡ Santral ve 💧 Su Pompası kur.');
+  else {
+    if (!net.pCap) w.push('⚡ Elektrik santrali yok.');
+    if (!net.wCap) w.push('💧 Su pompası yok.');
+    if (net.pCap && net.pUsed >= net.pCap - 2) w.push('⚡ Elektrik kapasitesi doldu, yeni santral kur.');
+    if (net.wCap && net.wUsed >= net.wCap - 2) w.push('💧 Su kapasitesi doldu, yeni pompa kur.');
+    if (stats.unserved) w.push(`${stats.unserved} bina elektrik veya su alamıyor (gri binalar).`);
+  }
+  if (money < 0) w.push('Bütçe ekside! Vergiyi artır veya gideri azalt.');
+  $('warn').innerHTML = w.map(s => '⚠ ' + s).join('<br>');
+  $('warn').style.display = w.length ? 'block' : 'none';
+}
+function setSpeed(s) {
+  speed = s;
+  document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('on', +b.dataset.speed === s));
+}
+document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => setSpeed(+b.dataset.speed));
+$('taxm').onclick = () => { tax = Math.max(0, tax - 1); computeDemand(); hud(); };
+$('taxp').onclick = () => { tax = Math.min(25, tax + 1); computeDemand(); hud(); };
+$('hintClose').onclick = () => { $('hint').style.display = 'none'; setTool('road'); };
+
+// ====================== Save / load ======================
+function save(auto = false) {
+  const data = {
+    v: 1, money, month, tax, nextSvc,
+    type: Array.from(type), zone: Array.from(zone), lvl: Array.from(lvl), tree: Array.from(tree),
+    services: [...services.values()].map(({ id, kind, x, z, size }) => ({ id, kind, x, z, size })),
+  };
+  const ok = store.set('kentkurucu.save', JSON.stringify(data));
+  if (!auto) showToast(ok ? 'Şehir kaydedildi.' : 'Kaydedilemedi (tarayıcı depolaması kapalı).', ok);
+}
+function load() {
+  let d;
+  try { d = JSON.parse(store.get('kentkurucu.save')); } catch { d = null; }
+  if (!d || d.v !== 1) return showToast('Kayıtlı şehir bulunamadı.');
+  for (const s of services.values()) scene.remove(s.group);
+  services.clear();
+  type = Uint8Array.from(d.type); zone = Uint8Array.from(d.zone); lvl = Uint8Array.from(d.lvl); tree = Uint8Array.from(d.tree);
+  served = new Uint8Array(N * N); svcAt = new Int32Array(N * N).fill(-1);
+  money = d.money; month = d.month; tax = d.tax; nextSvc = d.nextSvc;
+  for (const s of d.services) {
+    const g = makeServiceGroup(s.kind);
+    g.position.set(s.x - HALF + s.size / 2, 0, s.z - HALF + s.size / 2); scene.add(g);
+    services.set(s.id, { ...s, group: g });
+    for (let dz = 0; dz < s.size; dz++) for (let dx = 0; dx < s.size; dx++) svcAt[idx(s.x + dx, s.z + dz)] = s.id;
+  }
+  paintGround(); refresh(); showToast('Şehir yüklendi.', true);
+}
+$('save').onclick = () => save();
+$('load').onclick = load;
+$('new').onclick = () => { if (confirm('Yeni harita başlatılsın mı? Kaydedilmemiş ilerleme kaybolur.')) newGame(); };
+
+// ====================== Loop ======================
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+let acc = 0;
+const clock = new THREE.Clock();
+const _d = new THREE.Vector3();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  controls.update();
+  // keep the camera over the map
+  const t = controls.target, cx = clamp(t.x, -HALF, HALF), cz = clamp(t.z, -HALF, HALF);
+  if (cx !== t.x || cz !== t.z) { _d.set(cx - t.x, 0, cz - t.z); t.add(_d); camera.position.add(_d); }
+  if (speed > 0) { acc += dt * SPEEDS[speed]; if (acc >= TICK) { acc -= TICK; simTick(); } }
+  renderer.render(scene, camera);
+});
+
+newGame(20261122);
+setSpeed(1); setTool('hand');
+window.__kent = { get stats() { return stats; }, get money() { return money; }, get month() { return month; }, get demand() { return demand; }, get net() { return net; }, simTick, setTool,
+  screen(x, z) { const v = new THREE.Vector3(wx(x), 0, wx(z)).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; },
+  river(z) { for (let x = 0; x < N; x++) if (type[idx(x, z)] === T_WATER) return x; return -1; } };
+</script>
+</body>
+</html>
