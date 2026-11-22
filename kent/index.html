@@ -48,8 +48,15 @@
 
   #bottom { position:fixed; left:calc(6px + var(--sl)); right:calc(6px + var(--sr)); bottom:calc(6px + var(--sb)); display:flex; flex-direction:column; gap:6px; align-items:stretch; z-index:6; pointer-events:none; }
   #bottom > * { pointer-events:auto; }
-  #bar { display:flex; gap:5px; padding:5px; max-width:560px; width:100%; align-self:center; }
-  #bar button { flex:1; height:60px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:12px; }
+  #bar { display:flex; gap:4px; padding:5px; max-width:640px; width:100%; align-self:center; overflow-x:auto; scrollbar-width:none; }
+  #bar::-webkit-scrollbar { display:none; }
+  #bar button { flex:1 0 auto; min-width:56px; height:58px; padding:0 4px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:11.5px; }
+  #sub button.locked { opacity:.45; }
+  .msRow { display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-bottom:1px solid var(--line); }
+  .msRow b { min-width:130px; }
+  .pol { display:flex; gap:10px; align-items:center; padding:6px 0; }
+  .pol button { min-width:64px; min-height:38px; }
+  .pol button.on { background:#24543c; border-color:var(--acc); }
   #bar button .ic { font-size:22px; line-height:1; }
   #bar button.on { background:#24543c; border-color:var(--acc); }
   #sub { display:flex; gap:6px; padding:6px; overflow-x:auto; scrollbar-width:none; max-width:560px; width:100%; align-self:center; }
@@ -122,11 +129,13 @@
   <div class="chip panel">👥 <b id="pop">0</b></div>
   <div class="chip panel">😊 <b id="happy">—</b></div>
   <div class="chip panel">📅 <b id="date"></b></div>
-  <div class="chip panel" id="rci" title="Talep: Konut / Ticari / Sanayi">
+  <div class="chip panel" id="rci" title="Talep: Konut / Ticari / Sanayi / Ofis">
     <div class="bar" style="color:var(--r)"><i id="dR"></i></div>
     <div class="bar" style="color:var(--c)"><i id="dC"></i></div>
     <div class="bar" style="color:var(--i)"><i id="dI"></i></div>
+    <div class="bar" style="color:#a78bfa"><i id="dO"></i></div>
   </div>
+  <button class="chip panel" id="msChip" style="flex-direction:column;align-items:stretch;gap:3px;padding:5px 9px"><b id="msName" style="font-size:13px">🏆 Köy</b><span class="meter" style="width:84px;margin:0"><i id="msBar" style="width:0%;background:#fbbf24"></i></span></button>
   <div id="ctl" class="panel">
     <button data-speed="0">⏸</button><button data-speed="1">▶</button><button data-speed="2">⏩</button><button id="menuBtn">☰</button>
   </div>
@@ -163,11 +172,22 @@
   </div>
 </div>
 
+<div id="msModal" class="modal hidden">
+  <div class="panel">
+    <h2>🏆 Kilometre Taşları</h2>
+    <p class="muted">Yol, bina ve hizmet kurdukça ve nüfusun mutlu kaldıkça puan kazanırsın. Her kilometre taşı para ödülü verir ve yeni binaların kilidini açar.</p>
+    <div id="msList"></div>
+    <button class="big" id="msClose">Kapat</button>
+  </div>
+</div>
+
 <div id="menu" class="modal hidden">
   <div class="panel">
     <h2>☰ Menü</h2>
     <div class="row"><b>Vergi</b><button id="taxm">−</button><b id="taxv" style="min-width:48px;text-align:center">%9</b><button id="taxp">+</button><span class="muted">Yüksek vergi talebi ve mutluluğu düşürür.</span></div>
     <div id="budget"></div>
+    <h3 style="margin-top:12px;font-size:16px">🏛️ Politikalar</h3>
+    <div id="policyList" class="muted"></div>
     <div class="row"><b>Grafik</b><button data-q="0">Düşük</button><button data-q="1">Orta</button><button data-q="2">Yüksek</button></div>
     <div class="row"><b>Gece/gündüz</b><button id="dnBtn">Açık</button></div>
     <div class="row"><button id="save">💾 Kaydet</button><button id="load">📂 Yükle</button><button id="new">🆕 Yeni şehir</button></div>
@@ -195,39 +215,78 @@ import { VerticalTiltShiftShader } from 'three/addons/shaders/VerticalTiltShiftS
 // World scale: 1 tile = 16 m, one storey ≈ 3 m (0.19 units).
 const N = 64, HALF = N / 2, NN = N * N;
 const T_EMPTY = 0, T_WATER = 1, T_ROAD = 2, T_SVC = 3;
-const Z_R = 1, Z_C = 2, Z_I = 3;
-const RES = [0, 4, 14, 40], COMJ = [0, 6, 14, 30], INDJ = [0, 10, 20, 35];
-const ROAD_COST = 10, ZONE_REACH = 3;
+const Z_R = 1, Z_C = 2, Z_I = 3, Z_O = 4;
+const RES = [0, 4, 14, 40], COMJ = [0, 6, 14, 30], INDJ = [0, 10, 20, 35], OFFJ = [0, 12, 30, 60];
+const ROAD_COST = 10, AVE_COST = 25, ZONE_REACH = 3;
 const MONTHS = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+const SEASON_OF = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 0], SEASON_ICON = ['❄️', '🌸', '☀️', '🍂'], SEASON_NAME = ['Kış', 'İlkbahar', 'Yaz', 'Sonbahar'];
 const SPEEDS = [0, 1, 3], TICK = 2.5, DAY_LEN = 150;
-const FH = 0.19, BAYW = 0.2, SIDEWALK = 0.15, LANE = 0.09, PARK_OFF = 0.27, PED_OFF = 0.425;
+const FH = 0.19, BAYW = 0.2, SIDEWALK = 0.15, LANE = 0.09, AVE_LANE = 0.19, PARK_OFF = 0.27, PED_OFF = 0.425;
+// ms = milestone level that unlocks it; net = utility network; cov = coverage map
 const SVC = {
-  power:    { name: 'Elektrik Santrali', icon: '⚡', size: 2, cost: 8000,  upkeep: 220, cap: 240 },
-  water:    { name: 'Su Kulesi',         icon: '💧', size: 1, cost: 5000,  upkeep: 130, cap: 200 },
-  park:     { name: 'Park',              icon: '🌳', size: 1, cost: 800,   upkeep: 20 },
-  police:   { name: 'Polis Karakolu',    icon: '👮', size: 2, cost: 6000,  upkeep: 140, radius: 11, cov: 'police' },
-  fire:     { name: 'İtfaiye',           icon: '🚒', size: 2, cost: 7000,  upkeep: 150, radius: 11, cov: 'fire' },
-  school:   { name: 'Okul',              icon: '🏫', size: 2, cost: 9000,  upkeep: 190, radius: 10, cov: 'school' },
-  hospital: { name: 'Hastane',           icon: '🏥', size: 3, cost: 12000, upkeep: 250, radius: 13, cov: 'health' },
+  power:    { name: 'Kömür Santrali',    icon: '⚡', size: 2, cost: 8000,  upkeep: 220, cap: 240, net: 'power', ms: 0, polluter: 6 },
+  wind:     { name: 'Rüzgar Türbini',    icon: '🌬️', size: 1, cost: 3000,  upkeep: 40,  cap: 60,  net: 'power', ms: 2 },
+  solar:    { name: 'Güneş Santrali',    icon: '☀️', size: 2, cost: 9000,  upkeep: 70,  cap: 160, net: 'power', ms: 5 },
+  water:    { name: 'Su Kulesi',         icon: '💧', size: 1, cost: 5000,  upkeep: 130, cap: 200, net: 'water', ms: 0, nearWater: true },
+  sewage:   { name: 'Atık Su Tesisi',    icon: '🚿', size: 2, cost: 6000,  upkeep: 160, cap: 230, net: 'sewage', ms: 4, nearWater: true },
+  landfill: { name: 'Çöp Sahası',        icon: '🗑️', size: 2, cost: 4000,  upkeep: 120, cap: 260, net: 'garbage', ms: 1, polluter: 3 },
+  park:     { name: 'Park',              icon: '🌳', size: 1, cost: 800,   upkeep: 20,  ms: 0, park: 1 },
+  plaza:    { name: 'Meydan',            icon: '⛲', size: 1, cost: 1200,  upkeep: 25,  ms: 4, park: 1 },
+  police:   { name: 'Polis Karakolu',    icon: '👮', size: 2, cost: 6000,  upkeep: 140, radius: 11, cov: 'police', ms: 1 },
+  fire:     { name: 'İtfaiye',           icon: '🚒', size: 2, cost: 7000,  upkeep: 150, radius: 11, cov: 'fire', ms: 1 },
+  school:   { name: 'Okul',              icon: '🏫', size: 2, cost: 9000,  upkeep: 190, radius: 10, cov: 'school', ms: 2 },
+  univ:     { name: 'Üniversite',        icon: '🎓', size: 3, cost: 20000, upkeep: 380, radius: 18, cov: 'univ', ms: 5 },
+  hospital: { name: 'Hastane',           icon: '🏥', size: 3, cost: 12000, upkeep: 250, radius: 13, cov: 'health', ms: 3 },
+  cemetery: { name: 'Mezarlık',          icon: '🪦', size: 2, cost: 3500,  upkeep: 80,  radius: 12, cov: 'death', ms: 2 },
+  post:     { name: 'Postane',           icon: '📮', size: 1, cost: 2500,  upkeep: 60,  radius: 10, cov: 'post', ms: 4 },
+  depot:    { name: 'Otobüs Garı',       icon: '🚌', size: 2, cost: 6000,  upkeep: 150, ms: 3 },
+  clock:    { name: 'Saat Kulesi',       icon: '🕰️', size: 2, cost: 25000, upkeep: 100, radius: 12, cov: 'landmark', unique: 1, tourism: 450, ms: 5 },
+  stadium:  { name: 'Stadyum',           icon: '🏟️', size: 3, cost: 45000, upkeep: 300, radius: 16, cov: 'landmark', unique: 1, tourism: 950, ms: 6 },
+  tvtower:  { name: 'TV Kulesi',         icon: '🗼', size: 2, cost: 60000, upkeep: 200, radius: 18, cov: 'landmark', unique: 1, tourism: 1300, ms: 7 },
+  culture:  { name: 'Kültür Merkezi',    icon: '🏛️', size: 3, cost: 80000, upkeep: 350, radius: 18, cov: 'landmark', unique: 1, tourism: 1700, ms: 8 },
 };
 const TOOLDEF = {
-  road: { icon: '🛣️', name: 'Düz Yol', cost: '₺10/kare' }, curve: { icon: '〰️', name: 'Kavisli Yol', cost: '₺12/kare' },
-  res: { icon: '🏠', name: 'Konut', cost: 'bölge', zone: Z_R }, com: { icon: '🏬', name: 'Ticari', cost: 'bölge', zone: Z_C },
-  ind: { icon: '🏭', name: 'Sanayi', cost: 'bölge', zone: Z_I }, dezone: { icon: '🧹', name: 'Bölge Sil', cost: '' },
-  bulldoze: { icon: '🚜', name: 'Yık', cost: '' },
+  road: { icon: '🛣️', name: 'Düz Yol', cost: '₺10/kare', ms: 0 }, curve: { icon: '〰️', name: 'Kavisli Yol', cost: '₺12/kare', ms: 0 },
+  avenue: { icon: '🛤️', name: 'Geniş Cadde', cost: '₺25/kare', ms: 3 },
+  res: { icon: '🏠', name: 'Konut', cost: 'bölge', zone: Z_R, ms: 0 }, com: { icon: '🏬', name: 'Ticari', cost: 'bölge', zone: Z_C, ms: 0 },
+  ind: { icon: '🏭', name: 'Sanayi', cost: 'bölge', zone: Z_I, ms: 0 }, off: { icon: '🏢', name: 'Ofis', cost: 'bölge', zone: Z_O, ms: 4 },
+  dezone: { icon: '🧹', name: 'Bölge Sil', cost: '', ms: 0 },
+  busstop: { icon: '🚏', name: 'Otobüs Durağı', cost: '₺200', ms: 3 }, busline: { icon: '🗺️', name: 'Otobüs Hattı', cost: '₺50/ay', ms: 3 },
+  bulldoze: { icon: '🚜', name: 'Yık', cost: '', ms: 0 },
 };
-for (const k in SVC) TOOLDEF[k] = { icon: SVC[k].icon, name: SVC[k].name, cost: '₺' + SVC[k].cost.toLocaleString('tr-TR'), svc: k };
+for (const k in SVC) TOOLDEF[k] = { icon: SVC[k].icon, name: SVC[k].name, cost: '₺' + SVC[k].cost.toLocaleString('tr-TR'), svc: k, ms: SVC[k].ms };
 const CATS = [
-  { id: 'road', icon: '🛣️', name: 'Yol', items: ['road', 'curve'] },
-  { id: 'zone', icon: '🏘️', name: 'Bölge', items: ['res', 'com', 'ind', 'dezone'] },
-  { id: 'svc', icon: '🏛️', name: 'Hizmet', items: ['power', 'water', 'park', 'police', 'fire', 'school', 'hospital'] },
+  { id: 'road', icon: '🛣️', name: 'Yol', items: ['road', 'curve', 'avenue'] },
+  { id: 'zone', icon: '🏘️', name: 'Bölge', items: ['res', 'com', 'ind', 'off', 'dezone'] },
+  { id: 'util', icon: '⚡', name: 'Altyapı', items: ['power', 'wind', 'solar', 'water', 'sewage', 'landfill'] },
+  { id: 'svc', icon: '🏛️', name: 'Hizmet', items: ['police', 'fire', 'school', 'univ', 'hospital', 'cemetery', 'post', 'park', 'plaza'] },
+  { id: 'bus', icon: '🚌', name: 'Ulaşım', items: ['depot', 'busstop', 'busline'] },
+  { id: 'mark', icon: '🏆', name: 'Anıt', items: ['clock', 'stadium', 'tvtower', 'culture'] },
   { id: 'bull', icon: '🚜', name: 'Yık', tool: 'bulldoze' },
   { id: 'layer', icon: '🗺️', name: 'Katman', layers: true },
 ];
-const LAYERS = [['none', '🚫', 'Kapalı'], ['traffic', '🚗', 'Trafik'], ['util', '⚡', 'Elektrik/Su'], ['police', '👮', 'Polis'], ['fire', '🚒', 'İtfaiye'],
+const LAYERS = [['none', '🚫', 'Kapalı'], ['traffic', '🚗', 'Trafik'], ['util', '⚡', 'Elektrik/Su'], ['sewage', '🚿', 'Atık Su'], ['garbage', '🗑️', 'Çöp'],
+  ['pollution', '🏭', 'Kirlilik'], ['transit', '🚌', 'Toplu Taşıma'], ['police', '👮', 'Polis'], ['fire', '🚒', 'İtfaiye'],
   ['school', '🏫', 'Eğitim'], ['health', '🏥', 'Sağlık'], ['land', '💎', 'Arazi Değeri'], ['happy', '😊', 'Mutluluk']];
-const ZONE_NAME = ['', 'Konut', 'Ticari', 'Sanayi'];
-const ZONE_COLOR = [0, 0x4ade80, 0x60a5fa, 0xfbbf24];
+const ZONE_NAME = ['', 'Konut', 'Ticari', 'Sanayi', 'Ofis'];
+const ZONE_ICON = ['', '🏠', '🏬', '🏭', '🏢'];
+const ZONE_COLOR = [0, 0x4ade80, 0x60a5fa, 0xfbbf24, 0xa78bfa];
+const MILESTONES = [
+  { name: 'Köy', xp: 0, reward: 0 }, { name: 'Kasaba', xp: 120, reward: 15000 }, { name: 'Büyüyen Kasaba', xp: 350, reward: 20000 },
+  { name: 'Küçük Şehir', xp: 800, reward: 30000 }, { name: 'Şehir', xp: 1600, reward: 40000 }, { name: 'Büyük Şehir', xp: 2800, reward: 60000 },
+  { name: 'Bölge Merkezi', xp: 4500, reward: 80000 }, { name: 'Büyükşehir', xp: 7000, reward: 100000 }, { name: 'Metropol', xp: 10500, reward: 150000 },
+  { name: 'Megapol', xp: 15000, reward: 200000 },
+];
+const POLICIES = {
+  green: { name: 'Yeşil Şehir', icon: '🌿', desc: '+5 mutluluk, kirlilik −%30, sanayi talebi biraz düşer', upkeep: 150 },
+  industry: { name: 'Sanayi Teşviki', icon: '🏭', desc: 'Sanayi talebi ve geliri artar, kirlilik +%30', upkeep: 0 },
+  transit: { name: 'Ücretsiz Toplu Taşıma', icon: '🚌', desc: 'Toplu taşımanın mutluluk etkisi iki katı, araç trafiği azalır', upkeep: 200 },
+  recycle: { name: 'Geri Dönüşüm', icon: '♻️', desc: 'Çöp üretimi −%30', upkeep: 120 },
+  smart: { name: 'Akıllı Trafik', icon: '🚦', desc: 'Trafik sıkışıklığı −%35', upkeep: 150 },
+  tourism: { name: 'Turizm Tanıtımı', icon: '📸', desc: 'Anıtların turizm geliri +%50', upkeep: 200 },
+};
+const POLICY_MS = 3;
+const LINE_COLORS = [0xe63946, 0x2a9d8f, 0xf4a261, 0x457b9d, 0x9b5de5, 0xf15bb5, 0x00a6d6, 0x6a994e];
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
 const ASSET = 'assets/';
 
@@ -253,9 +312,12 @@ const $ = id => document.getElementById(id);
 let type, zone, lvl, tree, svcAt, served, crime, happy, burn, rubble, curveId = new Int16Array(64 * 64), curveT = new Float32Array(64 * 64);
 let services = new Map(), nextSvc = 1;
 let money, month, tax, speed = 1, dayT = 0.12, dayNight = store.get('kk.dn') !== '0';
-let stats = { pop: 0, jC: 0, jI: 0, unserved: 0, happy: 0 }, demand = { r: 0, c: 0, i: 0 };
-let net = { pUsed: 0, pCap: 0, wUsed: 0, wCap: 0, pR: new Uint8Array(NN), wR: new Uint8Array(NN) };
-const cov = { police: new Float32Array(NN), fire: new Float32Array(NN), school: new Float32Array(NN), health: new Float32Array(NN) };
+let stats = { pop: 0, jC: 0, jI: 0, jO: 0, unserved: 0, happy: 0, noSewage: 0, noGarbage: 0 }, demand = { r: 0, c: 0, i: 0, o: 0 };
+let net = { pUsed: 0, pCap: 0, wUsed: 0, wCap: 0, sUsed: 0, sCap: 0, gUsed: 0, gCap: 0, pR: new Uint8Array(NN), wR: new Uint8Array(NN), sR: new Uint8Array(NN), gR: new Uint8Array(NN) };
+const cov = {}; for (const k of ['police', 'fire', 'school', 'health', 'univ', 'death', 'post', 'landmark', 'transit']) cov[k] = new Float32Array(NN);
+const poll = new Float32Array(NN);
+let xp = 0, msLevel = 0, roadKind = new Uint8Array(NN);
+const policies = new Set(), busStops = new Set(), busLines = []; let nextLine = 1;
 const dens = new Float32Array(NN), cnt = new Uint16Array(NN);
 let lastIncome = 0, lastExpense = 0, overlay = 'none';
 let bldList = [], roadMaskCache = null, ready = false;
@@ -406,6 +468,20 @@ const M = { TRIM: 0, BRICK: 1, BEIGE: 2, PLASTER: 3, GREY: 4, STONE: 5, GLASS: 6
 const FACADES = new Set([M.BRICK, M.BEIGE, M.PLASTER, M.GREY, M.STONE, M.GLASS, M.SHOP, M.IND, M.INDBRICK]);
 const MATS = [];
 const emissiveMats = [];
+const SNOW = { value: 0 };
+function addSnow(mat, amt = 1) {
+  if (mat.userData.snow) return; mat.userData.snow = true;
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    prev?.call(mat, sh, r);
+    sh.uniforms.uSnow = SNOW;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vSnowN;')
+      .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n{ vec3 sn = objectNormal;\n#ifdef USE_INSTANCING\nsn = mat3(instanceMatrix) * sn;\n#endif\nvSnowN = normalize(mat3(modelMatrix) * sn).y; }');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vSnowN;\nuniform float uSnow;')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(.9, .93, .97), clamp(uSnow * ${amt.toFixed(2)} * smoothstep(.45, .85, vSnowN), 0., 1.));`);
+  };
+  const key = 'snow' + amt + mat.uuid; mat.customProgramCacheKey = () => key; mat.needsUpdate = true;
+}
 function buildMaterials() {
   const fac = (kind, wall, seed) => {
     const f = makeFacade(kind, wall, seed);
@@ -648,9 +724,119 @@ const GEN = {
     box(.6, .04, .04, -.08, .45, .3, M.TRIM, 0x8a8d91);
   },
 };
-const VARIANTS = { R1: 10, R2: 6, R3: 6, C1: 6, C2: 5, C3: 5, I1: 5, I2: 4, I3: 4 };
+GEN.O1 = r => {
+  lot(M.PAVE);
+  const w = .7 + r() * .16, d = .56 + r() * .16, fl = 3 + Math.floor(r() * 3), st = pick(r, [M.STONE, M.GLASS, M.PLASTER]);
+  fbox(w, FH + .02, d, 0, .02, -.06, M.SHOP, 0xffffff, 1);
+  fbox(w - .02, FH * (fl - 1), d - .02, 0, .04 + FH, -.06, st, st === M.GLASS ? pick(r, [0xffffff, 0xdfeef6, 0xe6f2ea]) : wallTint(r, st));
+  const top = .04 + FH * fl; box(w, .03, d, 0, top, -.06, M.TRIM, 0xd5d2cb); box(.2, .1, .16, .1, top + .03, -.1, M.TRIM, 0xb9b6b0);
+  box(w * .5, .04, .012, 0, .02 + FH + .01, -.06 + d / 2 + .006, M.PAINT, pick(r, [0x2f7de1, 0x1f2a36, 0x3fae6a, 0xd94f3a]));
+  for (const x of [-.3, .3]) { cyl(.004, .004, .22, x, .02, .4, M.TRIM, 0xdddddd, 5); box(.06, .035, .003, x + .03, .19, .4, M.PAINT, pick(r, [0xd62828, 0x2a58b5, 0x2fa84f])); }
+};
+GEN.O2 = r => {
+  lot(M.PAVE);
+  const w = .78 + r() * .14, d = .7 + r() * .16, fl = 7 + Math.floor(r() * 6), tint = pick(r, [0xffffff, 0xd8ecf6, 0xdff2ec, 0xeae6f6]);
+  fbox(w + .06, FH * 2, d + .06, 0, .02, 0, M.STONE, 0xf1eee8);
+  fbox(w - .04, FH * (fl - 2), d - .04, 0, .02 + FH * 2, 0, M.GLASS, tint);
+  const top = .02 + FH * fl; box(w - .02, .04, d - .02, 0, top, 0, M.TRIM, 0xc8ccd0);
+  if (r() < .5) { cyl(.18, .18, .01, .05, top + .04, .05, M.DARK, 0x3c4146, 20); box(.12, .003, .03, .05, top + .052, .05, M.TRIM, 0xffffff); } else box(.3, .12, .25, 0, top + .04, 0, M.TRIM, 0xb5b9be);
+};
+GEN.O3 = r => {
+  lot(M.PAVE);
+  const tw = .58 + r() * .12, fl = 18 + Math.floor(r() * 12), tint = pick(r, [0xcfe3f2, 0xd6efe8, 0xe9e2f5, 0xf0e9dc, 0xffffff]);
+  fbox(.9, FH * 2, .9, 0, .02, 0, M.GLASS, 0xffffff);
+  let y = .02 + FH * 2;
+  fbox(tw, FH * fl, tw, 0, y, 0, M.GLASS, tint); y += FH * fl;
+  if (r() < .6) { const f2 = 3 + Math.floor(r() * 5); fbox(tw * .7, FH * f2, tw * .7, 0, y, 0, M.GLASS, tint); y += FH * f2; }
+  box(tw * .5, .14, tw * .5, 0, y, 0, M.TRIM, 0xaeb4ba);
+  cyl(.007, .012, .8 + r() * .7, 0, y + .14, 0, M.TRIM, 0xe8e8e8, 6);
+};
+const VARIANTS = { R1: 10, R2: 6, R3: 6, C1: 6, C2: 5, C3: 5, I1: 5, I2: 4, I3: 4, O1: 4, O2: 4, O3: 4 };
 
 const SVCGEN = {
+  wind() { lot(M.LAWN); cyl(.022, .04, 1.15, 0, .02, 0, M.TRIM, 0xf2f2f0, 12); box(.06, .05, .14, 0, 1.15, -.02, M.TRIM, 0xeeeeee); },
+  solar() {
+    box(1.96, .02, 1.96, 0, 0, 0, M.LAWN);
+    for (let k = 0; k < 6; k++) for (const x of [-.48, .48]) { const g = new THREE.BoxGeometry(.86, .012, .2); g.rotateX(-.45); g.translate(x, .1, -.75 + k * .3); addPart(g, M.DARK, 0x22436b); box(.02, .08, .02, x, .02, -.75 + k * .3, M.TRIM, 0x8a8f94); }
+    box(.2, .14, .14, .8, .02, .85, M.TRIM, 0xd5d2cc);
+  },
+  sewage() {
+    box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
+    for (const [x, z] of [[-.45, -.45], [.45, -.45], [-.45, .45]]) { cyl(.36, .36, .1, x, .02, z, M.TRIM, 0xc9c6bf, 28); cyl(.32, .32, .104, x, .02, z, M.DARK, 0x55634a, 28); box(.64, .01, .02, x, .125, z, M.TRIM, 0x7a7f84); }
+    fbox(.5, .25, .4, .5, .02, .5, M.IND, 0xe0e4e8, 1); box(.52, .02, .42, .5, .27, .5, M.RMETAL, 0xaeb4ba);
+  },
+  landfill() {
+    box(1.96, .02, 1.96, 0, 0, 0, M.RGRAVEL, 0x8a7d66);
+    lathe([[.62, 0], [.45, .14], [.2, .24], [0, .26]], -.35, .02, -.3, M.TRIM, 0x6e6250, 18);
+    lathe([[.45, 0], [.3, .12], [.1, .18], [0, .19]], .45, .02, .2, M.TRIM, 0x7d6f5a, 16);
+    for (let k = 0; k < 12; k++) box(.04 + hash(k, 1) * .05, .02 + hash(k, 2) * .03, .04 + hash(k, 3) * .05, -.35 + (hash(k, 4) - .5) * .8, .2 + hash(k, 5) * .05, -.3 + (hash(k, 6) - .5) * .8, M.PAINT, [0x2f6e9a, 0xa6402f, 0x3f7a45, 0xc9a13b, 0xdddddd][k % 5]);
+    fbox(.4, .2, .3, .6, .02, -.65, M.IND, 0xe6e6e6, 1); box(.42, .02, .32, .6, .22, -.65, M.RMETAL, 0xaeb4ba);
+    for (const s of [-1, 1]) { box(1.96, .06, .01, 0, .02, .97 * s, M.TRIM, 0x8d9296); box(.01, .06, 1.96, .97 * s, .02, 0, M.TRIM, 0x8d9296); }
+  },
+  plaza() {
+    lot(M.PAVE); cyl(.2, .22, .05, 0, .02, 0, M.TRIM, 0xd8d4ca, 24); cyl(.17, .17, .055, 0, .02, 0, M.DARK, 0x5aa9d6, 24); cyl(.03, .04, .12, 0, .07, 0, M.TRIM, 0xd8d4ca, 10);
+    for (const [x, z] of [[-.36, -.36], [.36, -.36], [-.36, .36], [.36, .36]]) { box(.12, .04, .12, x, .02, z, M.TRIM, 0xb9b4a8); blob(.07, x, .14, z, 0x4f8a3a, Math.round(x * 50 + z * 7)); }
+    for (const x of [-.18, .18]) box(.1, .02, .03, x, .035, .3, M.TRIM, 0x6d4c33);
+  },
+  univ() {
+    box(2.96, .02, 2.96, 0, 0, 0, M.LAWN);
+    fbox(1.7, FH * 3, .55, 0, .02, -.9, M.BRICK, 0xf6e7dc); box(1.72, .03, .57, 0, .02 + FH * 3, -.9, M.TRIM, 0xe2ded6);
+    lathe([[.22, 0], [.2, .1], [.12, .2], [0, .24]], 0, .05 + FH * 3, -.9, M.PAINT, 0x5f8f7a, 18);
+    for (const x of [-1.05, 1.05]) { fbox(.5, FH * 2, 1.2, x, .02, .1, M.BRICK, 0xf6e7dc); box(.52, .03, 1.22, x, .02 + FH * 2, .1, M.TRIM, 0xe2ded6); }
+    for (let k = 0; k < 6; k++) cyl(.025, .025, FH * 2, -.5 + k * .2, .02, -.6, M.TRIM, 0xf2efe8, 10);
+    box(.16, .004, 1.4, 0, .021, .5, M.PAVE); box(1.4, .004, .16, 0, .021, .5, M.PAVE);
+    for (const [x, z] of [[-.45, .2], [.45, .2], [-.45, .9], [.45, .9]]) { cyl(.014, .02, .16, x, .02, z, M.TRIM, 0x5a4632, 6); blob(.11, x, .23, z, 0x4b8a36, Math.round(x * 30 + z * 9)); }
+  },
+  cemetery() {
+    box(1.96, .02, 1.96, 0, 0, 0, M.LAWN);
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 7; c++) box(.05, .05, .015, -.6 + c * .2, .02, -.55 + r * .22, M.TRIM, 0x9ea2a6);
+    fbox(.3, .25, .4, .7, .02, .65, M.STONE, 0xe8e2d6, 1); gable(.34, .14, .44, .7, .27, .65, M.RGREY, 0x6c727c, false);
+    for (const [x, z] of [[-.85, .8], [.2, .85], [-.85, -.85]]) { const g = new THREE.ConeGeometry(.07, .4, 8); g.translate(x, .22, z); addPart(g, M.LEAF, 0x2f5e2c); }
+    for (const s of [-1, 1]) { box(1.96, .05, .02, 0, .02, .97 * s, M.TRIM, 0x8a7d6a); box(.02, .05, 1.96, .97 * s, .02, 0, M.TRIM, 0x8a7d6a); }
+  },
+  post() { lot(M.PAVE); fbox(.72, FH * 2, .5, 0, .02, -.15, M.PLASTER, 0xfff0b8); box(.74, .03, .52, 0, .02 + FH * 2, -.15, M.TRIM, 0xe2ded6); box(.4, .07, .012, 0, .2, .106, M.PAINT, 0xf2c94c); box(.05, .1, .05, .35, .02, .35, M.PAINT, 0xf2c94c); },
+  depot() {
+    box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
+    fbox(1.6, .32, .8, 0, .02, -.5, M.IND, 0xe6ecf2, 1); box(1.62, .02, .82, 0, .34, -.5, M.RMETAL, 0xaeb4ba);
+    for (let k = 0; k < 4; k++) box(.3, .22, .012, -.6 + k * .4, .02, -.095, M.PAINT, 0x8b9096);
+    for (let k = 0; k < 3; k++) { box(.13, .11, .44, -.4 + k * .4, .03, .45, M.PAINT, [0xe63946, 0x2a9d8f, 0xf4a261][k]); box(.135, .04, .4, -.4 + k * .4, .09, .45, M.DARK, 0x1b232c); }
+  },
+  clock() {
+    box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
+    fbox(.42, 1.5, .42, 0, .02, 0, M.STONE, 0xf4e6cf); box(.48, .05, .48, 0, 1.52, 0, M.TRIM, 0xe8dcc6);
+    fbox(.38, .32, .38, 0, 1.57, 0, M.STONE, 0xf4e6cf);
+    for (const [x, z, ry] of [[0, .2, 0], [0, -.2, Math.PI], [.2, 0, Math.PI / 2], [-.2, 0, -Math.PI / 2]]) {
+      const g = new THREE.CylinderGeometry(.13, .13, .012, 24); g.rotateX(Math.PI / 2); g.rotateY(ry); g.translate(x, 1.73, z); addPart(g, M.TRIM, 0xfbf8ef);
+      const hnd = new THREE.BoxGeometry(.012, .09, .016); hnd.translate(0, .045, 0); hnd.rotateZ(.6); hnd.rotateY(ry); hnd.translate(x * 1.04, 1.73, z * 1.04); addPart(hnd, M.DARK, 0x1a1a1a);
+    }
+    hip(.44, .45, .44, 0, 1.89, 0, M.PAINT, 0x5f8f7a); cyl(.006, .01, .25, 0, 2.3, 0, M.PAINT, 0xd4af37, 6);
+    for (const [x, z] of [[-.7, -.7], [.7, -.7], [-.7, .7], [.7, .7]]) blob(.12, x, .2, z, 0x4b8a36, Math.round(x * 13 + z * 5));
+  },
+  stadium() {
+    box(2.96, .02, 2.96, 0, 0, 0, M.PAVE);
+    const g = new THREE.LatheGeometry([[1.0, .02], [1.36, .42], [1.42, .42], [1.42, 0]].map(([r, h]) => new THREE.Vector2(r, h)), 40); g.scale(1, 1, .78); addPart(g, M.TRIM, 0xd9dbde);
+    const f = new THREE.CylinderGeometry(1, 1, .02, 40); f.scale(1, 1, .78); f.translate(0, .02, 0); addPart(f, M.LAWN, 0xffffff);
+    box(1.1, .004, .008, 0, .031, 0, M.TRIM, 0xffffff); box(.008, .004, .9, 0, .031, 0, M.TRIM, 0xffffff);
+    for (const [x, z] of [[-1.3, -1], [1.3, -1], [-1.3, 1], [1.3, 1]]) { cyl(.015, .02, 1.0, x, .02, z, M.TRIM, 0xbfc3c7, 6); box(.2, .1, .04, x, 1.0, z, M.TRIM, 0xeeeeee); }
+  },
+  tvtower() {
+    box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
+    cyl(.05, .12, 3.0, 0, .02, 0, M.TRIM, 0xe1ded8, 16);
+    const pod = new THREE.SphereGeometry(.26, 24, 16); pod.translate(0, 2.55, 0); addPart(pod, M.DARK, 0x8fb2c9);
+    cyl(.3, .3, .05, 0, 2.3, 0, M.TRIM, 0xd9534f, 24); cyl(.04, .04, .4, 0, 2.8, 0, M.TRIM, 0xe1ded8, 10);
+    for (let k = 0; k < 6; k++) cyl(.008, .012, .2, 0, 3.2 + k * .2, 0, M.PAINT, k % 2 ? 0xd62828 : 0xffffff, 6);
+    for (let k = 0; k < 3; k++) { const a = k * 2.094; fbox(.3, .22, .2, Math.cos(a) * .45, .02, Math.sin(a) * .45, M.GLASS, 0xffffff, 1); }
+  },
+  culture() {
+    box(2.96, .02, 2.96, 0, 0, 0, M.PAVE);
+    for (let k = 0; k < 3; k++) box(2.2 - k * .06, .03, 1.5 - k * .06, 0, .02 + k * .03, -.25, M.TRIM, 0xe9e3d6);
+    fbox(2.0, .55, 1.2, 0, .11, -.35, M.STONE, 0xf6efe2);
+    for (let k = 0; k < 9; k++) cyl(.035, .035, .55, -.8 + k * .2, .11, .32, M.TRIM, 0xf7f2e6, 12);
+    box(2.0, .06, .2, 0, .66, .3, M.TRIM, 0xefe7d6); gable(2.0, .2, .22, 0, .72, .3, M.TRIM, 0xefe7d6, true);
+    const dome = new THREE.SphereGeometry(.45, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2); dome.translate(0, .72, -.35); addPart(dome, M.PAINT, 0x6c9a8b);
+    cyl(.06, .08, .2, 0, 1.15, -.35, M.TRIM, 0xefe7d6, 12); cyl(.005, .005, .18, 0, 1.35, -.35, M.PAINT, 0xd4af37, 6);
+    for (const [x, z] of [[-1.2, .9], [1.2, .9], [-1.2, -1.2], [1.2, -1.2]]) blob(.13, x, .2, z, 0x4b8a36, Math.round(x * 11 + z * 3));
+  },
   power() {
     box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
     fbox(.9, .42, .62, -.45, .02, -.55, M.IND, 0xe0e4e8, 1); box(.92, .02, .64, -.45, .44, -.55, M.RMETAL, 0xaeb4ba);
@@ -729,7 +915,7 @@ const VM = {}, PM = {};
 const CIV = ['sedan', 'sedan-sports', 'hatchback-sports', 'suv', 'suv-luxury', 'taxi', 'van'], TRUCKS = ['delivery', 'truck', 'garbage-truck'], SPECIAL = ['police', 'ambulance', 'firetruck'];
 const CAR_SCALE = .11, CAR_FLIP = 0, CAR_TINT = [0xffffff, 0xffffff, 0xffffff, 0xf2d6d6, 0xd8e4f5, 0xdedede, 0x9a9a9a, 0xe8f0d8];
 let CARS = null, CARTEX = null;
-let roadM, walkM, cornerM, dashM, zebraM, lampM, tlightM, treeA, treeB, pedM, stainM, trackM, holeM, rubbleM, zoneM, ovM, prevM, beaconM, flameM, smokeM, glowM;
+let roadM, walkM, cornerM, dashM, zebraM, lampM, tlightM, treeA, treeB, pedM, stainM, trackM, holeM, stopM, lineDotM, medianM, snowPts, rubbleM, zoneM, ovM, prevM, beaconM, flameM, smokeM, glowM;
 const glowMat = new THREE.MeshBasicMaterial({ color: 0xffd39a, transparent: true, opacity: 0, toneMapped: false, depthWrite: false });
 
 function wearTex(kind) {
@@ -804,6 +990,16 @@ function buildMeshes() {
     VM[name] = mkInst(g, carMat, SPECIAL.includes(name) ? 40 : 200);
     if (CIV.includes(name) || TRUCKS.includes(name)) PM[name] = mkInst(g, carMat, 1200);
   }
+  box(.12, .1, .44, 0, .03, 0, M.PAINT, 0xffffff); box(.124, .045, .4, 0, .075, -.01, M.DARK, 0x1b232c); box(.118, .045, .006, 0, .06, .221, M.DARK, 0x1b232c);
+  box(.11, .01, .4, 0, .13, 0, M.TRIM, 0xe8e8e8); box(.07, .02, .1, 0, .14, -.08, M.TRIM, 0xcfd3d6);
+  for (const x of [-.058, .058]) for (const z of [-.14, .14]) { const g = new THREE.CylinderGeometry(.024, .024, .016, 10); g.rotateZ(Math.PI / 2); g.translate(x, .024, z); addPart(g, M.PAINT, 0x16181a); }
+  VM.bus = mkInst(finish(), MATS, 80);
+  box(.16, .005, .06, 0, .1, 0, M.TRIM, 0x5b6168); box(.16, .07, .004, 0, .03, -.028, M.DARK, 0x9fc2d6); box(.004, .07, .06, -.08, .03, 0, M.TRIM, 0x5b6168); box(.004, .07, .06, .08, .03, 0, M.TRIM, 0x5b6168);
+  box(.12, .012, .03, 0, .045, -.012, M.TRIM, 0x6d4c33); box(.012, .12, .012, .1, .03, .02, M.PAINT, 0x1e6fd9); box(.04, .04, .006, .1, .13, .02, M.PAINT, 0x1e6fd9);
+  stopM = mkInst(finish(), MATS, 600);
+  lineDotM = mkInst(new THREE.CylinderGeometry(.05, .05, .006, 10).translate(0, .026, 0), new THREE.MeshBasicMaterial({ color: 0xffffff }), NN * 2, false);
+  box(1, .025, .07, 0, .02, 0, M.TRIM, 0xc9c6bf); box(1, .028, .05, 0, .02, 0, M.LEAF, 0x5d8f45);
+  medianM = mkInst(finish(), MATS, NN);
   { const g = new THREE.CapsuleGeometry(.009, .05, 3, 6); g.translate(0, .034, 0); addPart(g, M.PAINT, 0xffffff); const h = new THREE.SphereGeometry(.009, 6, 5); h.translate(0, .078, 0); addPart(h, M.TRIM, 0xe0b899); }
   pedM = mkInst(finish(), MATS, 400);
   const decal = (tex, w, d, y, max, opts = {}) => { const g = new THREE.PlaneGeometry(w, d); g.rotateX(-Math.PI / 2); g.translate(0, y, 0); return mkInst(g, new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: .9, polygonOffset: true, polygonOffsetFactor: -1, ...opts }), max, false); };
@@ -846,6 +1042,7 @@ function buildTerrain() {
         col *= .82 + mk.b * .36;
         diffuseColor.rgb *= col;`);
   };
+  addSnow(mat, .95);
   ground = new THREE.Mesh(groundGeo, mat); ground.receiveShadow = true; scene.add(ground);
   for (const [x, z, w, d] of [[0, -HALF - 149.5, 2 * N + 600, 301], [0, HALF + 149.5, 2 * N + 600, 301], [-HALF - 149.5, 0, 301, N + 2], [HALF + 149.5, 0, 301, N + 2]]) {
     const g = new THREE.PlaneGeometry(w, d, 1, 1).rotateX(-Math.PI / 2), uv = g.attributes.uv;
@@ -905,7 +1102,7 @@ function buildScenery() {
     if (r && k) { const A = (r - 1) * (seg + 1) + k - 1, B = A + 1, C = A + seg + 1, D = C + 1; ind.push(A, C, B, B, C, D); }
   }
   const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); hg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); hg.setIndex(ind); hg.computeVertexNormals();
-  hills = new THREE.Mesh(hg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })); scene.add(hills);
+  hills = new THREE.Mesh(hg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 })); addSnow(hills.material, 1); scene.add(hills);
 }
 const grid = new THREE.GridHelper(N, N, 0x000000, 0x000000);
 grid.material.transparent = true; grid.material.opacity = 0.1; grid.position.y = 0.03; scene.add(grid);
@@ -918,7 +1115,8 @@ function alloc() {
   for (const id of [...curves.keys()]) removeCurve(id);
   curveId = new Int16Array(NN); curveT = new Float32Array(NN); nextCurve = 1;
   for (const s of services.values()) scene.remove(s.mesh);
-  services.clear(); vehicles.length = 0; burning.clear();
+  services.clear(); vehicles.length = 0; burning.clear(); spinners.clear();
+  roadKind = new Uint8Array(NN); busStops.clear(); busLines.length = 0; nextLine = 1; policies.clear(); xp = 0; msLevel = 0;
 }
 function newGame(seed = (Math.random() * 1e9) | 0) {
   alloc(); nextSvc = 1;
@@ -932,7 +1130,7 @@ function newGame(seed = (Math.random() * 1e9) | 0) {
     const f = Math.sin(x * 0.21 + p3) * Math.sin(z * 0.17 + p4) + Math.sin((x + z) * 0.09 + p1) * 0.6;
     if (f > 0.55 && hash(x, z, seed) < 0.85) tree[i] = 1;
   }
-  money = 80000; month = 0; tax = 9; dayT = 0.12;
+  money = 80000; month = 0; tax = 9; dayT = 0.12; hudMilestone();
   paintGround(); refresh();
 }
 function nearType(x, z, t, r) {
@@ -976,7 +1174,11 @@ function rampColor(v, out = _C) { v = clamp(v, 0, 1); return v < .5 ? out.copy(R
 function ovValue(i) {
   switch (overlay) {
     case 'police': case 'fire': case 'school': case 'health': return cov[overlay][i];
-    case 'util': return lvl[i] ? ((served[i] & 1) + (served[i] >> 1)) / 2 : type[i] === T_ROAD ? (net.pR[i] + net.wR[i]) / 2 : null;
+    case 'util': return lvl[i] ? ((served[i] & 1) + (served[i] >> 1 & 1)) / 2 : type[i] === T_ROAD ? (net.pR[i] + net.wR[i]) / 2 : null;
+    case 'sewage': return lvl[i] ? (served[i] & 4 ? 1 : 0) : type[i] === T_ROAD ? net.sR[i] : null;
+    case 'garbage': return lvl[i] ? (served[i] & 8 ? 1 : 0) : type[i] === T_ROAD ? net.gR[i] : null;
+    case 'pollution': return type[i] === T_ROAD ? null : 1 - Math.min(1, poll[i] / 8);
+    case 'transit': return type[i] === T_ROAD ? null : cov.transit[i];
     case 'land': return type[i] === T_EMPTY ? landValue(i) : null;
     case 'happy': return zone[i] === Z_R && lvl[i] ? happy[i] / 100 : null;
   }
@@ -1004,7 +1206,7 @@ function roadMaskAt(x, z) {
 const popcount = m => (m & 1) + (m >> 1 & 1) + (m >> 2 & 1) + (m >> 3 & 1);
 const isRoad = (x, z) => inb(x, z) && type[idx(x, z)] === T_ROAD;
 function bldMesh(i) {
-  const x = i % N, z = (i / N) | 0, list = BMESH['RCI'[zone[i] - 1] + lvl[i]];
+  const x = i % N, z = (i / N) | 0, list = BMESH['RCIO'[zone[i] - 1] + lvl[i]];
   return list[Math.floor(hash(x, z, 1) * list.length) % list.length];
 }
 // local offset (along, across) in a frame rotated by rot → world dx, dz
@@ -1043,7 +1245,7 @@ function rasterCurve(c) {
 }
 let curveMats = null;
 function buildCurveMesh(c) {
-  if (!curveMats) curveMats = [roadM.material, walkM.material, dashM.material].map(m => { const k = m.clone(); k.side = THREE.DoubleSide; return k; });
+  if (!curveMats) { curveMats = [roadM.material, walkM.material, dashM.material].map(m => { const k = m.clone(); k.side = THREE.DoubleSide; return k; }); addSnow(curveMats[0], .35); addSnow(curveMats[1], .7); }
   const S = curveSamples(c, .08), grp = new THREE.Group();
   const strip = (o0, o1, y0, y1, us, vs, mat, v0 = 0) => {
     const pos = [], uv = [], ind = [];
@@ -1082,8 +1284,9 @@ function rebuild() {
   const parkCar = (x, z, rot, h) => { const name = CIV[Math.floor(h * 977) % CIV.length]; P(PM[name], x, .02, z, 1, 1, 1, rot, CAR_TINT[Math.floor(h * 131) % CAR_TINT.length]); };
   const plant = (m, x, z, s, r, rot) => {
     const roll = hash(Math.round(x * 97), Math.round(z * 89), 7);
-    if (m === treeA && roll < .07) _C.setHSL(.07 + r * .05, .75, .45);            // autumn
-    else if (m === treeA && roll < .1) _C.setHSL(.94, .6, .7);                    // blossom
+    const season = SEASON_OF[month % 12], aut = season === 3 ? .7 : .07, blo = season === 1 ? .3 : .03;
+    if (m === treeA && roll < aut) _C.setHSL(.05 + r * .07, .8, .42 + r * .08);     // autumn
+    else if (m === treeA && roll < aut + blo) _C.setHSL(.94, .6, .7);              // blossom
     else _C.setHSL(.25 + r * .07, .5 + r * .15, .22 + r * .1);
     P(m, x, 0, z, s, s * (.9 + r * .3), s, rot, _C);
   };
@@ -1105,9 +1308,15 @@ function rebuild() {
       if (!(m & 8)) P(walkM, X - .425, 0, Z, 1, 1, 1, Math.PI / 2, 0xffffff);
       for (const [dx, dz, a, b] of [[1, 1, 2, 4], [-1, 1, 8, 4], [1, -1, 2, 1], [-1, -1, 8, 1]])
         if ((m & a) && (m & b) && !isRoad(x + dx, z + dz)) P(cornerM, X + dx * .425, 0, Z + dz * .425, 1, 1, 1, 0, 0xffffff);
+      const ave = roadKind[i] === 2;
+      if (busStops.has(i)) { const sx = straightZ ? .44 : 0, sz = straightZ ? 0 : .44; P(stopM, X + sx, .034, Z + sz, 1, 1, 1, straightZ ? -Math.PI / 2 : Math.PI, 0xffffff); }
       if (straightX || straightZ) {
         const rot = straightX ? 0 : Math.PI / 2;
-        P(dashM, X, 0, Z, 1, 1, 1, rot, 0xffffff);
+        if (ave) {
+          P(medianM, X, 0, Z, 1, 1, 1, rot, 0xffffff);
+          for (const s of [1, -1]) { const [ox, oz] = rotXZ(0, .19 * s, rot); P(dashM, X + ox, 0, Z + oz, 1, 1, 1, rot, 0xffffff); }
+          if ((x + z) % 2 === 0) plant(treeA, X, Z, .5, H(77), H(78) * 6);
+        } else P(dashM, X, 0, Z, 1, 1, 1, rot, 0xffffff);
         for (const s of [1, -1]) { const [ox, oz] = rotXZ(0, LANE * s, rot); P(trackM, X + ox, 0, Z + oz, 1, 1, 1, rot, _C.setScalar(.7 + H(90 + s) * .3)); }
         const ax = straightX ? 1 : 0, az = straightX ? 0 : 1;
         for (const s of [1, -1]) if (isRoad(x + ax * s, z + az * s) && popcount(roadMaskAt(x + ax * s, z + az * s)) >= 3) P(zebraM, X + ax * s * .36, 0, Z + az * s * .36, 1, 1, 1, rot, 0xffffff);
@@ -1122,7 +1331,7 @@ function rebuild() {
         for (const s of [1, -1]) if ((!lamp || s !== side) && H(95 + s) < .45) { const [ox, oz] = rotXZ((H(97 + s) - .5) * .4, .43 * s, rot); plant(treeA, X + ox, Z + oz, .62 + H(99) * .2, H(98), H(96) * 6); }
         for (const s of [1, -1]) {
           const bx = x + (straightX ? 0 : s), bz = z + (straightX ? s : 0);
-          if (H(50 + s) < .4 && inb(bx, bz) && lvl[idx(bx, bz)]) {
+          if (!ave && H(50 + s) < .4 && inb(bx, bz) && lvl[idx(bx, bz)]) {
             const [ox, oz] = rotXZ((H(60 + s) - .5) * .5, PARK_OFF * s, rot);
             parkCar(X + ox, Z + oz, rot + Math.PI / 2 * (s > 0 ? 1 : -1), H(70 + s));
           }
@@ -1152,6 +1361,8 @@ function rebuild() {
     P(mesh, X, 0, Z, 1, 1, 1, rot, _C);
     (mesh.geometry.userData.park || []).forEach(([px, pz, pr], k) => { if (H(200 + k) < .65) { const [ox, oz] = rotXZ(px, pz, rot); parkCar(X + ox, Z + oz, rot + pr + (H(300 + k) < .5 ? 0 : Math.PI), H(400 + k)); } });
   }
+  // bus line route markers (transit layer or bus tools)
+  if (overlay === 'transit' || tool === 'busline' || tool === 'busstop') for (const L of busLines) if (L.path) L.path.forEach((t, k) => { if (k % 2 === 0) P(lineDotM, wx(t % N), 0, wx((t / N) | 0), 1, 1, 1, 0, L.color); });
   // lamps along curved roads
   for (const c of curves.values()) curveSamples(c, 1.4).forEach((q, k) => {
     if (k === 0) return;
@@ -1161,7 +1372,7 @@ function rebuild() {
   });
   for (const key in BMESH) for (const m of BMESH[key]) commit(m, counts.get(m) || 0);
   for (const k in PM) commit(PM[k], counts.get(PM[k]) || 0);
-  for (const m of [roadM, walkM, cornerM, dashM, zebraM, trackM, stainM, holeM, lampM, glowM, tlightM, treeA, treeB, rubbleM, zoneM, ovM]) commit(m, counts.get(m) || 0);
+  for (const m of [roadM, walkM, cornerM, dashM, zebraM, trackM, stainM, holeM, lampM, glowM, tlightM, treeA, treeB, rubbleM, zoneM, ovM, stopM, lineDotM, medianM]) commit(m, counts.get(m) || 0);
   for (const s of services.values()) s.mesh.traverse(o => { if (o.isMesh) o.material = ovOn && overlay !== 'traffic' ? grayMat : MATS; });
   roadMaskCache = null;
 }
@@ -1177,16 +1388,22 @@ function badge(icon) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   return badgeMats[icon] = new THREE.SpriteMaterial({ map: t, depthWrite: false });
 }
-const svcGeoCache = {};
+const svcGeoCache = {}, spinners = new Set();
 function makeServiceMesh(kind) {
   const d = SVC[kind], grp = new THREE.Group();
   if (!svcGeoCache[kind]) { SVCGEN[kind](); svcGeoCache[kind] = finish(); }
   const m = new THREE.Mesh(svcGeoCache[kind], MATS); m.castShadow = m.receiveShadow = true; grp.add(m);
-  if (kind !== 'park') { const s = new THREE.Sprite(badge(d.icon)); s.scale.set(.5, .5, 1); s.position.set(0, svcGeoCache[kind].userData.h + .4, 0); grp.add(s); }
+  if (kind === 'wind') {
+    if (!svcGeoCache.rotor) { for (let k = 0; k < 3; k++) { const b = new THREE.BoxGeometry(.03, .48, .008); b.translate(0, .24, 0); b.rotateZ(k * 2.094); addPart(b, M.TRIM, 0xf7f7f5); } svcGeoCache.rotor = finish(); }
+    const rotor = new THREE.Mesh(svcGeoCache.rotor, MATS); rotor.position.set(0, 1.2, .06); rotor.castShadow = true; grp.add(rotor); spinners.add(rotor);
+  }
+  if (kind !== 'park' && kind !== 'plaza' && kind !== 'wind') { const s = new THREE.Sprite(badge(d.icon)); s.scale.set(.5, .5, 1); s.position.set(0, svcGeoCache[kind].userData.h + .4, 0); grp.add(s); }
   return grp;
 }
 
 // ============================================================ Simulation
+const unlocked = t => (TOOLDEF[t]?.ms || 0) <= msLevel;
+const hasPolicy = k => policies.has(k);
 function roadMask() { return roadMaskCache ||= type.map(t => t === T_ROAD ? 1 : 0); }
 function svcRoads(s) {
   const out = [];
@@ -1197,9 +1414,9 @@ function svcRoads(s) {
   }
   return out;
 }
-function bfs(kind) {
+function bfs(netName) {
   const reach = new Uint8Array(NN), q = [];
-  for (const s of services.values()) if (s.kind === kind) for (const j of svcRoads(s)) if (!reach[j]) { reach[j] = 1; q.push(j); }
+  for (const s of services.values()) if (SVC[s.kind].net === netName) for (const j of svcRoads(s)) if (!reach[j]) { reach[j] = 1; q.push(j); }
   while (q.length) { const j = q.pop(); for (const k of roadNbrs(j)) if (!reach[k]) { reach[k] = 1; q.push(k); } }
   return reach;
 }
@@ -1208,42 +1425,60 @@ function nearMask(i, mask, r = ZONE_REACH) {
   for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) { const X = x + dx, Z = z + dz; if (inb(X, Z) && mask[idx(X, Z)]) return true; }
   return false;
 }
+// served bits: 1 power, 2 water, 4 sewage, 8 garbage
 function computeNetworks() {
-  const pR = bfs('power'), wR = bfs('water');
-  let pCap = 0, wCap = 0, pUsed = 0, wUsed = 0;
-  for (const s of services.values()) { if (s.kind === 'power') pCap += SVC.power.cap; if (s.kind === 'water') wCap += SVC.water.cap; }
+  const R = { power: bfs('power'), water: bfs('water'), sewage: bfs('sewage'), garbage: bfs('garbage') };
+  const cap = { power: 0, water: 0, sewage: 0, garbage: 0 }, used = { power: 0, water: 0, sewage: 0, garbage: 0 };
+  for (const s of services.values()) { const d = SVC[s.kind]; if (d.net) cap[d.net] += d.cap; }
+  const winter = SEASON_OF[month % 12] === 0, gMul = hasPolicy('recycle') ? .7 : 1;
   served.fill(0);
   for (let i = 0; i < NN; i++) {
     const L = lvl[i]; if (!L) continue;
-    if (pUsed + L <= pCap && nearMask(i, pR)) { served[i] |= 1; pUsed += L; }
-    if (wUsed + L <= wCap && nearMask(i, wR)) { served[i] |= 2; wUsed += L; }
+    const need = { power: L * (winter ? 1.15 : 1), water: L, sewage: L, garbage: L * gMul };
+    [['power', 1], ['water', 2], ['sewage', 4], ['garbage', 8]].forEach(([n, bit]) => { if (used[n] + need[n] <= cap[n] && nearMask(i, R[n])) { served[i] |= bit; used[n] += need[n]; } });
   }
-  net = { pUsed, pCap, wUsed, wCap, pR, wR };
+  const r = Math.round;
+  net = { pUsed: r(used.power), pCap: cap.power, wUsed: r(used.water), wCap: cap.water, sUsed: r(used.sewage), sCap: cap.sewage, gUsed: r(used.garbage), gCap: cap.garbage, pR: R.power, wR: R.water, sR: R.sewage, gR: R.garbage };
+}
+function stamp(c, cx, cz, R, w = 1) {
+  for (let z = Math.max(0, Math.floor(cz - R)); z < Math.min(N, Math.ceil(cz + R)); z++)
+    for (let x = Math.max(0, Math.floor(cx - R)); x < Math.min(N, Math.ceil(cx + R)); x++) {
+      const dist = Math.hypot(x + .5 - cx, z + .5 - cz); if (dist > R) continue;
+      const v = (1 - (dist / R) ** 2) * w, i = idx(x, z); if (v > c[i]) c[i] = v;
+    }
 }
 function computeCoverage() {
   for (const k in cov) cov[k].fill(0);
+  poll.fill(0);
   for (const s of services.values()) {
-    const d = SVC[s.kind]; if (!d.cov || !svcRoads(s).length) continue;
-    const c = cov[d.cov], R = d.radius, cx = s.x + s.size / 2, cz = s.z + s.size / 2;
-    for (let z = Math.max(0, Math.floor(cz - R)); z < Math.min(N, Math.ceil(cz + R)); z++)
-      for (let x = Math.max(0, Math.floor(cx - R)); x < Math.min(N, Math.ceil(cx + R)); x++) {
-        const dist = Math.hypot(x + .5 - cx, z + .5 - cz); if (dist > R) continue;
-        const v = 1 - (dist / R) ** 2, i = idx(x, z); if (v > c[i]) c[i] = v;
-      }
+    const d = SVC[s.kind], cx = s.x + s.size / 2, cz = s.z + s.size / 2;
+    if (d.cov && svcRoads(s).length) stamp(cov[d.cov], cx, cz, d.radius);
+    if (d.polluter) addPollution(cx, cz, d.polluter, 6);
   }
+  for (let i = 0; i < NN; i++) if (zone[i] === Z_I && lvl[i]) addPollution(i % N + .5, ((i / N) | 0) + .5, lvl[i], 4);
+  const pm = hasPolicy('green') ? .7 : hasPolicy('industry') ? 1.3 : 1;
+  if (pm !== 1) for (let i = 0; i < NN; i++) poll[i] *= pm;
+  // public transport: stops on working lines
+  if ([...services.values()].some(s => s.kind === 'depot' && svcRoads(s).length))
+    for (const L of busLines) if (L.ok) for (const st of L.stops) stamp(cov.transit, st % N + .5, ((st / N) | 0) + .5, 4.5);
+}
+function addPollution(cx, cz, amount, R) {
+  for (let z = Math.max(0, Math.floor(cz - R)); z < Math.min(N, Math.ceil(cz + R)); z++)
+    for (let x = Math.max(0, Math.floor(cx - R)); x < Math.min(N, Math.ceil(cx + R)); x++) {
+      const dist = Math.hypot(x + .5 - cx, z + .5 - cz); if (dist <= R) poll[idx(x, z)] += amount * (1 - dist / R);
+    }
+}
+function parksNear(i, r) {
+  const x = i % N, z = (i / N) | 0; let n = 0;
+  for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) { const X = x + dx, Z = z + dz; if (!inb(X, Z)) continue; const j = idx(X, Z); if (svcAt[j] >= 0 && SVC[services.get(svcAt[j])?.kind]?.park) n++; }
+  return n;
 }
 function landValue(i) {
   const x = i % N, z = (i / N) | 0;
-  let v = .3, parks = 0, inds = 0, coms = 0;
-  for (let dz = -5; dz <= 5; dz++) for (let dx = -5; dx <= 5; dx++) {
-    const X = x + dx, Z = z + dz; if (!inb(X, Z)) continue;
-    const j = idx(X, Z), d = Math.max(Math.abs(dx), Math.abs(dz));
-    if (svcAt[j] >= 0 && services.get(svcAt[j])?.kind === 'park') parks++;
-    if (d <= 4 && zone[j] === Z_I && lvl[j]) inds++;
-    if (d <= 3 && zone[j] === Z_C && lvl[j]) coms++;
-  }
-  v += Math.min(parks * .12, .45) + Math.min(coms * .02, .12) + cov.police[i] * .08 + cov.school[i] * .06 + cov.health[i] * .06;
-  if (zone[i] !== Z_I) v -= Math.min(inds * .06, .4);
+  let v = .3, coms = 0;
+  for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) { const X = x + dx, Z = z + dz; if (inb(X, Z) && (zone[idx(X, Z)] === Z_C || zone[idx(X, Z)] === Z_O) && lvl[idx(X, Z)]) coms++; }
+  v += Math.min(parksNear(i, 5) * .12, .45) + Math.min(coms * .02, .12) + cov.police[i] * .08 + cov.school[i] * .06 + cov.health[i] * .06 + cov.landmark[i] * .15 + cov.transit[i] * .06 + cov.univ[i] * .05;
+  if (zone[i] !== Z_I) v -= Math.min(poll[i] * .04, .4);
   if (nearType(x, z, T_WATER, 3)) v += .1;
   return clamp(v, 0, 1);
 }
@@ -1253,47 +1488,68 @@ function trafficNear(i) {
   return n ? s / n : 0;
 }
 function happinessOf(i) {
-  const x = i % N, z = (i / N) | 0;
-  let h = 52 + 10 * cov.police[i] + 6 * cov.fire[i] + 9 * cov.school[i] + 10 * cov.health[i];
-  let parks = 0, poll = 0;
-  for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
-    const X = x + dx, Z = z + dz; if (!inb(X, Z)) continue; const j = idx(X, Z);
-    if (svcAt[j] >= 0 && services.get(svcAt[j])?.kind === 'park') parks++;
-    if (zone[j] === Z_I && lvl[j]) poll += lvl[j];
-  }
-  h += Math.min(parks * 5, 15) - Math.min(poll * 2, 25) - crime[i] * 15 - Math.min(trafficNear(i) * 5, 12) - (tax - 9) * 2.5;
-  if (served[i] !== 3) h -= 30;
+  let h = 52 + 10 * cov.police[i] + 6 * cov.fire[i] + 9 * cov.school[i] + 10 * cov.health[i] + 4 * cov.death[i] + 3 * cov.post[i] + 8 * cov.landmark[i];
+  h += cov.transit[i] * (hasPolicy('transit') ? 10 : 5);
+  h += Math.min(parksNear(i, 4) * 5, 15) - Math.min(poll[i] * 2, 25) - crime[i] * 15 - Math.min(trafficNear(i) * 5, 12) - (tax - 9) * 2.5;
+  if (hasPolicy('green')) h += 5;
+  if ((served[i] & 3) !== 3) h -= 30;
+  if (msLevel >= 1 && !(served[i] & 8)) h -= 8;
+  if (msLevel >= 4 && !(served[i] & 4)) h -= 8;
+  if (stats.pop > 800 && cov.death[i] === 0) h -= 4;
   return clamp(h, 0, 100);
 }
 function computeStats() {
-  let pop = 0, jC = 0, jI = 0, unserved = 0, hs = 0;
+  let pop = 0, jC = 0, jI = 0, jO = 0, unserved = 0, hs = 0, noSewage = 0, noGarbage = 0;
   for (let i = 0; i < NN; i++) {
     const L = lvl[i]; if (!L) continue;
     if (zone[i] === Z_R) happy[i] = happinessOf(i);
-    if (served[i] !== 3) { unserved++; continue; }
-    if (zone[i] === Z_R) { pop += RES[L]; hs += happy[i] * RES[L]; } else if (zone[i] === Z_C) jC += COMJ[L]; else jI += INDJ[L];
+    if (msLevel >= 4 && !(served[i] & 4)) noSewage++;
+    if (msLevel >= 1 && !(served[i] & 8)) noGarbage++;
+    if ((served[i] & 3) !== 3) { unserved++; continue; }
+    if (zone[i] === Z_R) { pop += RES[L]; hs += happy[i] * RES[L]; } else if (zone[i] === Z_C) jC += COMJ[L]; else if (zone[i] === Z_O) jO += OFFJ[L]; else jI += INDJ[L];
   }
-  stats = { pop, jC, jI, unserved, happy: pop ? hs / pop : 0 };
+  stats = { pop, jC, jI, jO, unserved, happy: pop ? hs / pop : 0, noSewage, noGarbage };
 }
 function computeDemand() {
-  const { pop, jC, jI } = stats, tf = (10 - tax) * .04, hf = pop ? (stats.happy - 50) / 120 : 0;
-  demand.r = clamp((jC + jI - pop * .55 + 40) / Math.max(60, pop * .25) + tf + hf);
+  const { pop, jC, jI, jO } = stats, tf = (10 - tax) * .04, hf = pop ? (stats.happy - 50) / 120 : 0;
+  demand.r = clamp((jC + jI + jO - pop * .55 + 40) / Math.max(60, pop * .25) + tf + hf);
   demand.c = clamp((pop * .22 - jC) / Math.max(25, pop * .1) + tf);
-  demand.i = clamp((pop * .33 - jI + 30) / Math.max(40, pop * .15) + tf);
+  demand.i = clamp((pop * .3 - jI + 30) / Math.max(40, pop * .15) + tf + (hasPolicy('industry') ? .25 : 0) - (hasPolicy('green') ? .15 : 0));
+  demand.o = unlocked('off') ? clamp((pop * .14 - jO + 10) / Math.max(30, pop * .08) + tf) : 0;
 }
 function canUpgrade(i, L) {
-  const lv = landValue(i), z = zone[i];
+  const lv = landValue(i), z = zone[i], g = served[i] & 8, sw = served[i] & 4;
+  if (L === 1 && !g) return false;                 // level 2 needs garbage collection
+  if (L === 2 && !sw) return false;                // level 3 needs sewage
   if (z === Z_R) return L === 1 ? lv >= .35 && happy[i] >= 45 : lv >= .55 && happy[i] >= 60 && cov.school[i] > 0 && cov.health[i] > 0;
   if (z === Z_C) return L === 1 ? lv >= .35 && stats.pop >= 200 : lv >= .55 && stats.pop >= 1200 && cov.police[i] > 0;
+  if (z === Z_O) return L === 1 ? lv >= .45 && cov.school[i] > 0 : lv >= .6 && cov.univ[i] > 0;
   return L === 1 ? true : cov.school[i] > 0 && cov.fire[i] > 0;
 }
+function addXp(n) {
+  xp += n;
+  while (msLevel + 1 < MILESTONES.length && xp >= MILESTONES[msLevel + 1].xp) {
+    msLevel++;
+    const m = MILESTONES[msLevel], news = Object.keys(TOOLDEF).filter(t => TOOLDEF[t].ms === msLevel).map(t => TOOLDEF[t].icon + ' ' + TOOLDEF[t].name);
+    money += m.reward;
+    if (msLevel === POLICY_MS) news.push('🏛️ Politikalar');
+    showToast(`🎉 ${m.name}! +₺${fmt(m.reward)}${news.length ? ' · Açıldı: ' + news.join(', ') : ''}`, { cls: 'ok', ms: 6000 });
+    if (openCat) { const c = CATS.find(c => c.id === openCat); if (c) openSub(c); }
+  }
+  hudMilestone();
+}
+function addXpSilent(n) { xp += n; while (msLevel + 1 < MILESTONES.length && xp >= MILESTONES[msLevel + 1].xp) msLevel++; hudMilestone(); }
+function busUpkeep() { return busLines.reduce((s, L) => s + (L.ok ? L.buses * 50 : 0), 0); }
+function policyUpkeep() { let u = 0; for (const k of policies) u += POLICIES[k].upkeep; return u; }
+function roadUpkeep() { let r = 0; for (let i = 0; i < NN; i++) if (type[i] === T_ROAD) r += roadKind[i] === 2 ? 2 : 1; return r; }
+function tourismIncome() { let t = 0; for (const s of services.values()) t += SVC[s.kind].tourism || 0; return Math.round(t * (hasPolicy('tourism') ? 1.5 : 1) * Math.min(1, stats.pop / 500)); }
 function simTick() {
   computeNetworks(); computeCoverage(); computeStats(); computeDemand();
-  const D = [0, demand.r, demand.c, demand.i];
+  const D = [0, demand.r, demand.c, demand.i, demand.o];
   let pLeft = net.pCap - net.pUsed, wLeft = net.wCap - net.wUsed;
-  const cand = [[], [], [], []];
+  const cand = [[], [], [], [], []];
   for (let i = 0; i < NN; i++) if (zone[i] && type[i] === T_EMPTY && !lvl[i] && !rubble[i] && nearMask(i, net.pR) && nearMask(i, net.wR)) cand[zone[i]].push(i);
-  for (let zt = 1; zt <= 3; zt++) {
+  for (let zt = 1; zt <= 4; zt++) {
     const d = D[zt], c = cand[zt]; if (d <= .05) continue;
     let n = Math.min(c.length, Math.ceil(d * 5 * (.5 + Math.random())));
     while (n-- > 0 && pLeft > 0 && wLeft > 0) {
@@ -1304,7 +1560,7 @@ function simTick() {
   for (let i = 0; i < NN; i++) {
     const L = lvl[i]; if (!L) continue;
     const d = D[zone[i]];
-    if (L < 3 && served[i] === 3 && d > .15 && pLeft > 0 && wLeft > 0 && Math.random() < d * .06 && canUpgrade(i, L)) { lvl[i]++; pLeft--; wLeft--; }
+    if (L < 3 && (served[i] & 3) === 3 && d > .15 && pLeft > 0 && wLeft > 0 && Math.random() < d * .06 && canUpgrade(i, L)) { lvl[i]++; pLeft--; wLeft--; }
     else if ((d < -.4 && Math.random() < .02) || (zone[i] === Z_R && happy[i] < 20 && Math.random() < .04)) lvl[i]--;
     crime[i] = clamp(crime[i] + .03 * L * (1 - cov.police[i]) * Math.min(1, stats.pop / 1000) - .12 * cov.police[i], 0, 1);
     if (lvl[i] && !burn[i] && stats.pop >= 150 && Math.random() < .0012 * (1 - .85 * cov.fire[i]) * (zone[i] === Z_I ? 2 : 1)) startFire(i);
@@ -1315,21 +1571,57 @@ function simTick() {
   }
   for (let i = 0; i < NN; i++) if (rubble[i]) rubble[i]--;
   computeNetworks(); computeStats();
-  let roads = 0; for (let i = 0; i < NN; i++) if (type[i] === T_ROAD) roads++;
-  lastIncome = Math.round((stats.pop * 2.2 + stats.jC * 2 + stats.jI * 1.7) * tax / 10);
-  lastExpense = roads; for (const s of services.values()) lastExpense += SVC[s.kind].upkeep;
+  checkBusLines();
+  lastIncome = Math.round((stats.pop * 2.2 + stats.jC * 2 + stats.jI * (hasPolicy('industry') ? 1.95 : 1.7) + stats.jO * 2.6) * tax / 10) + tourismIncome();
+  lastExpense = roadUpkeep() + busUpkeep() + policyUpkeep();
+  for (const s of services.values()) lastExpense += SVC[s.kind].upkeep;
   money += lastIncome - lastExpense;
   month++;
+  addXp(2 + Math.floor(stats.pop / 25 * (stats.happy > 55 ? 1.25 : 1)) + Math.floor((stats.jC + stats.jI + stats.jO) / 60));
   if (month % 12 === 0) save(true);
   for (const s of services.values()) {
-    if ((s.kind === 'police' || s.kind === 'hospital') && stats.pop > 0 && Math.random() < .6 && vehicles.filter(v => v.home === s.id).length < 2) {
-      const r = svcRoads(s); if (r.length) spawnVehicle(r[(Math.random() * r.length) | 0], { kind: s.kind === 'police' ? 'police' : 'ambulance', home: s.id, life: 20 + Math.random() * 15, speed: 2.1 });
+    const kind = s.kind === 'police' ? 'police' : s.kind === 'hospital' ? 'ambulance' : s.kind === 'landfill' ? 'garbage' : null;
+    if (kind && stats.pop > 0 && Math.random() < .6 && vehicles.filter(v => v.home === s.id).length < 2) {
+      const r = svcRoads(s); if (r.length) spawnVehicle(r[(Math.random() * r.length) | 0], { kind, home: s.id, life: 20 + Math.random() * 15, speed: kind === 'garbage' ? 1 : 2.1 });
     }
   }
   rebuild(); hud(); if (cardCell) showInfo(cardCell);
 }
 function refresh() { computeNetworks(); computeCoverage(); computeStats(); computeDemand(); rebuild(); hud(); }
 
+// ============================================================ Buses
+function roadPath(a, b) {
+  if (a === b) return [a];
+  const prev = new Int32Array(NN).fill(-2), q = [a]; prev[a] = -1;
+  for (let h = 0; h < q.length; h++) { const j = q[h]; if (j === b) break; for (const k of roadNbrs(j)) if (prev[k] === -2) { prev[k] = j; q.push(k); } }
+  if (prev[b] === -2) return null;
+  const out = []; for (let j = b; j !== -1; j = prev[j]) out.push(j);
+  return out.reverse();
+}
+function linePath(stops) {
+  const path = [stops[0]];
+  for (let k = 0; k < stops.length; k++) { const seg = roadPath(stops[k], stops[(k + 1) % stops.length]); if (!seg) return null; path.push(...seg.slice(1)); }
+  return path.length > 2 ? path : null;
+}
+function spawnBuses(L) {
+  for (let k = vehicles.length - 1; k >= 0; k--) if (vehicles[k].line === L.id) vehicles.splice(k, 1);
+  if (!L.ok) return;
+  const n = L.buses = clamp(Math.round(L.path.length / 12), 1, 4), last = L.path.length - 1;
+  for (let j = 0; j < n; j++) {
+    const si = Math.floor(j * last / n), path = L.path.slice(si).concat(L.path.slice(1, si + 1));
+    spawnVehicle(path[0], { kind: 'bus', model: 'bus', path, loop: true, line: L.id, life: 1e9, speed: .95, color: L.color });
+  }
+}
+function checkBusLines() {
+  const depot = [...services.values()].some(s => s.kind === 'depot' && svcRoads(s).length);
+  for (const L of busLines) {
+    L.stops = L.stops.filter(st => busStops.has(st) && type[st] === T_ROAD);
+    const okPath = L.stops.length >= 2 && L.path && L.path.every(i => type[i] === T_ROAD);
+    if (!okPath) L.path = L.stops.length >= 2 ? linePath(L.stops) : null;
+    const was = L.ok; L.ok = depot && !!L.path;
+    if (L.ok !== was || (L.ok && !vehicles.some(v => v.line === L.id))) spawnBuses(L);
+  }
+}
 // ============================================================ Fires
 const burning = new Set();
 function startFire(i) {
@@ -1376,7 +1668,7 @@ function spawnVehicle(start, o) {
   if (o.path) c = o.path[1];
   else { const nb = roadNbrs(start); if (!nb.length) return null; c = nb[(Math.random() * nb.length) | 0]; }
   const v = { a: start, b: start, c, t: 0, pi: 1, off: LANE, color: CAR_TINT[(Math.random() * CAR_TINT.length) | 0], ...o };
-  v.model = v.kind === 'car' ? CIV[(Math.random() * CIV.length) | 0] : v.kind === 'truck' ? TRUCKS[(Math.random() * TRUCKS.length) | 0] : v.kind === 'firetruck' ? 'firetruck' : v.kind === 'police' ? 'police' : v.kind === 'ambulance' ? 'ambulance' : null;
+  v.model = o.model || (v.kind === 'car' ? CIV[(Math.random() * CIV.length) | 0] : v.kind === 'truck' ? TRUCKS[(Math.random() * TRUCKS.length) | 0] : v.kind === 'garbage' ? 'garbage-truck' : ['firetruck', 'police', 'ambulance'].includes(v.kind) ? v.kind : null);
   vehicles.push(v); return v;
 }
 const cpos = i => [i % N - HALF + .5, ((i / N) | 0) - HALF + .5];
@@ -1403,7 +1695,9 @@ function updateVehicles(dt) {
   if (spawnAcc > .25 && bldList.length) {
     spawnAcc = 0;
     let civ = 0, peds = 0; for (const v of vehicles) { if (v.kind === 'car' || v.kind === 'truck') civ++; else if (v.kind === 'ped') peds++; }
-    const want = Math.min(maxCars(), Math.floor(stats.pop / 9 + (stats.jC + stats.jI) / 22)), wantP = Math.min(maxPeds(), Math.floor(stats.pop / 7));
+    let tc = 0; for (const i of bldList) tc += cov.transit[i]; tc = bldList.length ? tc / bldList.length : 0;
+    const carMul = 1 - tc * (hasPolicy('transit') ? .5 : .3);
+    const want = Math.min(maxCars(), Math.floor((stats.pop / 9 + (stats.jC + stats.jI + stats.jO) / 22) * carMul)), wantP = Math.min(maxPeds(), Math.floor(stats.pop / 7 * (1 + tc * .5)));
     for (let k = 0; k < 4; k++) {
       const i = bldList[(Math.random() * bldList.length) | 0], x = i % N, z = (i / N) | 0;
       const rx = x + ((Math.random() * 7) | 0) - 3, rz = z + ((Math.random() * 7) | 0) - 3;
@@ -1421,13 +1715,21 @@ function updateVehicles(dt) {
     if (type[v.b] !== T_ROAD || type[v.c] !== T_ROAD) { vehicles.splice(k, 1); continue; }
     if (v.spray != null) { v.spray -= gdt; if (v.spray <= 0) { extinguish(v.target); vehicles.splice(k, 1); } continue; }
     v.life -= gdt; if (v.life <= 0) { vehicles.splice(k, 1); continue; }
-    const len = v.a === v.b ? .5 : 1, slow = v.kind === 'firetruck' || v.kind === 'ped' ? 1 : 1 + .45 * Math.max(0, cnt[v.b] - 1);
+    if (v.wait > 0) { v.wait -= gdt; continue; }
+    const cong = (roadKind[v.b] === 2 ? .2 : .45) * (hasPolicy('smart') ? .65 : 1) * (SEASON_OF[month % 12] === 0 ? 1.25 : 1);
+    const len = v.a === v.b ? .5 : 1, slow = v.kind === 'firetruck' || v.kind === 'ped' ? 1 : 1 + cong * Math.max(0, cnt[v.b] - 1);
     v.t += gdt * v.speed / len / slow;
     while (v.t >= 1) {
       let next;
-      if (v.path) { next = v.path[v.pi + 1]; if (next === undefined) { v.t = 1; v.spray = burn[v.target] ? 2.5 : .01; break; } v.pi++; }
+      if (v.path) {
+        next = v.path[v.pi + 1];
+        if (next === undefined && v.loop) { v.pi = 0; next = v.path[1]; }
+        if (next === undefined) { v.t = 1; v.spray = burn[v.target] ? 2.5 : .01; break; }
+        v.pi++;
+      }
       else { const nb = roadNbrs(v.c).filter(j => j !== v.b); next = nb.length ? nb[(Math.random() * nb.length) | 0] : v.b; }
       v.t -= 1; v.a = v.b; v.b = v.c; v.c = next;
+      if (v.kind === 'bus' && busStops.has(v.b)) { v.wait = 1.2; break; }
     }
   }
 }
@@ -1441,7 +1743,9 @@ function drawVehicles(time) {
       const sg = Math.sign(tc - tb) || 1, q = bez(cv, pr), d = bezD(cv, pr), dl = Math.hypot(d[0], d[1]) || 1, dx = d[0] / dl * sg, dz = d[1] / dl * sg;
       x = q[0] + dz * v.off; z = q[1] - dx * v.off; rot = Math.atan2(dx, dz);
     } else {
-      const [P0, P1, P2] = curve(v);
+      const ave = v.kind !== 'ped' && (roadKind[v.b] === 2 || roadKind[v.c] === 2), keep = v.off;
+      if (ave) v.off = AVE_LANE;
+      const [P0, P1, P2] = curve(v); v.off = keep;
       x = u * u * P0[0] + 2 * u * t * P1[0] + t * t * P2[0]; z = u * u * P0[1] + 2 * u * t * P1[1] + t * t * P2[1];
       rot = Math.atan2(2 * u * (P1[0] - P0[0]) + 2 * t * (P2[0] - P1[0]), 2 * u * (P1[1] - P0[1]) + 2 * t * (P2[1] - P1[1]));
     }
@@ -1507,6 +1811,14 @@ function updateDay(dt) {
   if (bloom) bloom.strength = .08 + .4 * (1 - k);
   if (waterNormal) { waterNormal.offset.x += dt * .012; waterNormal.offset.y += dt * .006; }
   if (clouds) { clouds.rotation.y += dt * .002; clouds.userData.mat.color.setScalar(.18 + .82 * k); }
+  // seasons: snow cover fades in and out, flakes fall around the camera target in winter
+  const winter = SEASON_OF[month % 12] === 0;
+  SNOW.value += ((winter ? 1 : 0) - SNOW.value) * Math.min(1, dt * .25);
+  if (snowPts) {
+    snowPts.visible = SNOW.value > .3 && winter;
+    if (snowPts.visible) { const a = snowPts.geometry.attributes.position; for (let j = 0; j < a.count; j++) { let y = a.getY(j) - dt * 1.6; if (y < 0) y += 18; a.setY(j, y); a.setX(j, a.getX(j) + Math.sin(time + j) * dt * .2); } a.needsUpdate = true; snowPts.position.set(controls.target.x, 0, controls.target.z); }
+  }
+  for (const r of spinners) r.rotation.z += dt * 2.2;
   envAcc += dt; if (envAcc > 3 && Math.abs(dayT - envDay) > .004) { envAcc = 0; envDay = dayT; updateEnv(); }
 }
 
@@ -1531,9 +1843,15 @@ function openSub(c) {
   const items = c.layers ? LAYERS.map(([id, ic, name]) => ({ id, ic, name, cost: '' })) : c.items.map(id => ({ id, ic: TOOLDEF[id].icon, name: TOOLDEF[id].name, cost: TOOLDEF[id].cost }));
   for (const it of items) {
     const b = document.createElement('button');
-    b.innerHTML = `<span class="ic">${it.ic}</span><span>${it.name}</span>${it.cost ? `<span class="cost">${it.cost}</span>` : ''}`;
+    const lock = !c.layers && !unlocked(it.id), built = !c.layers && SVC[it.id]?.unique && [...services.values()].some(s => s.kind === it.id);
+    b.innerHTML = `<span class="ic">${lock ? '🔒' : it.ic}</span><span>${it.name}</span><span class="cost">${lock ? MILESTONES[TOOLDEF[it.id].ms].name : built ? 'kuruldu' : it.cost}</span>`;
     b.classList.toggle('on', c.layers ? overlay === it.id : tool === it.id);
-    b.onclick = () => { if (c.layers) setOverlay(it.id); else setTool(it.id); closeSub(); };
+    b.classList.toggle('locked', lock || built);
+    b.onclick = () => {
+      if (lock) return showToast(`🔒 ${TOOLDEF[it.id].name}, "${MILESTONES[TOOLDEF[it.id].ms].name}" kilometre taşında açılır.`, { cls: 'info' });
+      if (built) return showToast(`${TOOLDEF[it.id].name} zaten kuruldu; anıt binalardan yalnızca bir tane olur.`, { cls: 'info' });
+      if (c.layers) setOverlay(it.id); else setTool(it.id); closeSub();
+    };
     sub.appendChild(b);
   }
   syncBar();
@@ -1554,15 +1872,17 @@ function setTool(t) {
   controls.touches.TWO = panMode ? THREE.TOUCH.DOLLY_ROTATE : THREE.TOUCH.DOLLY_PAN;
   grid.visible = !panMode;
   $('active').classList.toggle('hidden', panMode);
-  if (t) $('aText').textContent = `${TOOLDEF[t].icon} ${TOOLDEF[t].name}${t === 'curve' ? ' — sürükle, sonra bük' : IS_TOUCH ? (SVC[t] ? ' — yere dokun' : ' — sürükle') : ''}`;
-  curveDraft = null; bending = false;
+  const hint = { curve: ' — sürükle, sonra bük', busstop: ' — yola dokun (tekrar dokununca kalkar)', busline: ' — duraklara sırayla dokun, sonra ✓' }[t];
+  if (t) $('aText').textContent = `${TOOLDEF[t].icon} ${TOOLDEF[t].name}${hint || (IS_TOUCH ? (SVC[t] ? ' — yere dokun' : ' — sürükle') : '')}`;
+  curveDraft = null; bending = false; lineDraft = [];
+  if (t === 'busline' || t === 'busstop' || overlay === 'transit') rebuild();
   syncBar(); updatePreview(); hud();
 }
 function setOverlay(o) { overlay = o; rebuild(); syncBar(); if (o !== 'none') showToast(`Katman: ${LAYERS.find(l => l[0] === o)[2]} (kırmızı kötü, yeşil iyi)`, { cls: 'info', ms: 1800 }); }
 
 function cellsFor(a, b) {
   const out = [];
-  if (tool === 'road') {
+  if (tool === 'road' || tool === 'avenue') {
     const hFirst = Math.abs(b.x - a.x) >= Math.abs(b.z - a.z), corner = hFirst ? { x: b.x, z: a.z } : { x: a.x, z: b.z };
     const seg = (p, q) => { const dx = Math.sign(q.x - p.x), dz = Math.sign(q.z - p.z); let x = p.x, z = p.z; out.push(idx(x, z)); while (x !== q.x || z !== q.z) { x += dx; z += dz; out.push(idx(x, z)); } };
     seg(a, corner); seg(corner, b); return [...new Set(out)];
@@ -1575,7 +1895,8 @@ function footprint(c, size) {
   for (let dz = 0; dz < size; dz++) for (let dx = 0; dx < size; dx++) { if (!inb(c.x + dx, c.z + dz)) return null; out.push(idx(c.x + dx, c.z + dz)); }
   return out;
 }
-let curveDraft = null, bending = false;
+let curveDraft = null, bending = false, lineDraft = [];
+const aveCost = list => list.filter(c => c.ok && !(type[c.i] === T_ROAD && roadKind[c.i] === 2)).reduce((s, c) => s + (type[c.i] === T_ROAD ? AVE_COST - ROAD_COST : AVE_COST), 0);
 function curveList(d) {
   const p0 = [wx(d.a.x), wx(d.a.z)], p2 = [wx(d.b.x), wx(d.b.z)], c = { p0, p1: d.ctrl || [(p0[0] + p2[0]) / 2, (p0[1] + p2[1]) / 2], p2 };
   const r = rasterCurve(c);
@@ -1585,16 +1906,17 @@ function curveList(d) {
 function selection(a, b) {
   if (!b || !tool) return [];
   if (tool === 'curve') return curveList(curveDraft || { a: a || b, b });
+  if (tool === 'busline') return lineDraft.map(i => ({ i, ok: true }));
   if (SVC[tool]) {
     const fp = footprint(b, SVC[tool].size); if (!fp) return [];
     let ok = fp.every(i => type[i] === T_EMPTY);
-    if (tool === 'water') ok = ok && fp.some(i => nearType(i % N, (i / N) | 0, T_WATER, 1));
+    if (SVC[tool].nearWater) ok = ok && fp.some(i => nearType(i % N, (i / N) | 0, T_WATER, 1));
     return fp.map(i => ({ i, ok }));
   }
   const rm = TOOLDEF[tool].zone ? roadMask() : null;
   return cellsFor(a || b, b).map(i => {
     let ok;
-    if (tool === 'road') ok = type[i] === T_EMPTY || type[i] === T_ROAD;
+    if (tool === 'road' || tool === 'avenue') ok = type[i] === T_EMPTY || type[i] === T_ROAD;
     else if (TOOLDEF[tool].zone) ok = type[i] === T_EMPTY && nearMask(i, rm);
     else if (tool === 'dezone') ok = zone[i] > 0;
     else ok = type[i] === T_ROAD || type[i] === T_SVC || zone[i] > 0 || tree[i] > 0 || rubble[i] > 0;
@@ -1618,8 +1940,10 @@ function summarize(list) {
   const okN = list.filter(c => c.ok).length;
   if (tool === 'curve') { const n = list.filter(c => type[c.i] !== T_ROAD).length, bad = list.some(c => !c.ok); return { text: bad ? '⛔ Su veya hizmet binası üzerinden geçemez' : `〰️ ${n} kare · ₺${fmt(n * 12)} · bükmek için sürükle`, ok: !bad && list.length > 1 && n * 12 <= money }; }
   if (tool === 'road') { const n = list.filter(c => c.ok && type[c.i] !== T_ROAD).length; return { text: `🛣️ ${n} kare · ₺${fmt(n * ROAD_COST)}`, ok: n > 0 && n * ROAD_COST <= money }; }
+  if (tool === 'avenue') { const cost = aveCost(list); return { text: `🛤️ ${okN} kare · ₺${fmt(cost)}`, ok: okN > 0 && cost > 0 && cost <= money }; }
+  if (tool === 'busline') { const n = list.length; return { text: n < 2 ? `🗺️ ${n} durak seçildi — en az 2 durağa dokun` : `🗺️ ${n} duraklı hat · ₺50/ay/otobüs`, ok: n >= 2 }; }
   if (TOOLDEF[tool].zone) return { text: `${TOOLDEF[tool].icon} ${okN} kare ${TOOLDEF[tool].name.toLowerCase()}`, ok: okN > 0 };
-  if (SVC[tool]) { const d = SVC[tool], ok = list[0]?.ok; return { text: ok ? `${d.icon} ${d.name} · ₺${fmt(d.cost)}` : (tool === 'water' ? '💧 Nehir kenarındaki boş araziye kur' : '⛔ Buraya kurulamaz'), ok: ok && d.cost <= money }; }
+  if (SVC[tool]) { const d = SVC[tool], ok = list[0]?.ok; return { text: ok ? `${d.icon} ${d.name} · ₺${fmt(d.cost)}` : (d.nearWater ? `${d.icon} Nehir kenarındaki boş araziye kur` : '⛔ Buraya kurulamaz'), ok: ok && d.cost <= money }; }
   return { text: `${TOOLDEF[tool].icon} ${okN} kare ${tool === 'dezone' ? 'bölge silinecek' : 'yıkılacak'}`, ok: okN > 0 };
 }
 function showPending(list, cell) {
@@ -1630,7 +1954,7 @@ function showPending(list, cell) {
   $('confirm').classList.remove('hidden');
   drawPreview(list);
 }
-function cancelPending() { pending = null; curveDraft = null; bending = false; $('confirm').classList.add('hidden'); drawPreview([]); }
+function cancelPending() { pending = null; curveDraft = null; bending = false; lineDraft = []; $('confirm').classList.add('hidden'); drawPreview([]); }
 $('cNo').onclick = () => cancelPending();
 $('cYes').onclick = () => { if (pending) { apply(pending.list, pending.cell); cancelPending(); } };
 $('aEnd').onclick = () => setTool(null);
@@ -1646,12 +1970,24 @@ function apply(list, cell) {
       if (type[e.i] !== T_ROAD) { type[e.i] = T_ROAD; zone[e.i] = 0; lvl[e.i] = 0; tree[e.i] = 0; rubble[e.i] = 0; extinguishSilently(e.i); }
       if (!curveId[e.i]) { curveId[e.i] = c.id; curveT[e.i] = e.t; }
     }
-    addCurve(c); money -= cost; curveDraft = null;
+    addCurve(c); money -= cost; curveDraft = null; addXp(Math.ceil(list.length / 2));
+  } else if (tool === 'avenue') {
+    const cost = aveCost(list); if (cost > money) return showToast('Yetersiz bütçe!');
+    let n = 0;
+    for (const { i, ok } of list) { if (!ok || roadKind[i] === 2) continue; if (curveId[i]) removeCurve(curveId[i]); if (type[i] !== T_ROAD) { type[i] = T_ROAD; zone[i] = 0; lvl[i] = 0; tree[i] = 0; rubble[i] = 0; extinguishSilently(i); } roadKind[i] = 2; n++; }
+    money -= cost; addXp(n);
+  } else if (tool === 'busline') {
+    if (![...services.values()].some(s => s.kind === 'depot')) return showToast('Önce bir 🚌 Otobüs Garı kur.');
+    const stops = lineDraft.slice(), path = linePath(stops);
+    if (!path) return showToast('Duraklar arasında yol bağlantısı yok.');
+    const L = { id: nextLine++, stops, path, color: LINE_COLORS[(nextLine - 2) % LINE_COLORS.length], buses: 0, ok: false };
+    busLines.push(L); lineDraft = []; checkBusLines(); computeCoverage(); addXp(10);
+    showToast(`🚌 Hat ${L.id} açıldı: ${stops.length} durak, ${L.buses} otobüs.`, { cls: 'ok' });
   } else if (tool === 'road') {
     const cells = list.filter(c => c.ok && type[c.i] !== T_ROAD).map(c => c.i), cost = cells.length * ROAD_COST;
     if (cost > money) return showToast('Yetersiz bütçe!');
-    for (const i of cells) { type[i] = T_ROAD; zone[i] = 0; lvl[i] = 0; tree[i] = 0; rubble[i] = 0; extinguishSilently(i); }
-    money -= cost;
+    for (const i of cells) { type[i] = T_ROAD; roadKind[i] = 1; zone[i] = 0; lvl[i] = 0; tree[i] = 0; rubble[i] = 0; extinguishSilently(i); }
+    money -= cost; addXp(cells.length);
     if (list.some(c => !c.ok)) showToast('Su ve hizmet binalarının üzerinden yol geçemez.');
   } else if (TOOLDEF[tool].zone) {
     const z = TOOLDEF[tool].zone; let any = false;
@@ -1659,28 +1995,38 @@ function apply(list, cell) {
     if (!any) showToast('Bölgeler yola en fazla 3 kare uzakta olmalı.');
   } else if (SVC[tool]) {
     const d = SVC[tool];
-    if (!list[0].ok) return showToast(tool === 'water' ? 'Su kulesi nehir kenarındaki boş araziye kurulmalı.' : 'Buraya inşa edilemez.');
+    if (!list[0].ok) return showToast(d.nearWater ? `${d.name} nehir kenarındaki boş araziye kurulmalı.` : 'Buraya inşa edilemez.');
     if (d.cost > money) return showToast('Yetersiz bütçe!');
+    if (d.unique && [...services.values()].some(s => s.kind === tool)) return showToast('Bu anıt zaten kurulu.');
     const id = nextSvc++;
     for (const { i } of list) { zone[i] = 0; lvl[i] = 0; tree[i] = 0; extinguishSilently(i); }
     addService(tool, cell.x, cell.z, id);
     money -= d.cost;
-    const conn = svcRoads(services.get(id)).length || tool === 'park';
+    const conn = svcRoads(services.get(id)).length || d.park || tool === 'wind' || tool === 'solar';
     showToast(`${d.name} kuruldu${conn ? '' : ' — yola bağlamayı unutma!'}`, { cls: conn ? 'ok' : '' });
+    addXp(d.unique ? 120 : 15);
   } else if (tool === 'dezone') {
     for (const { i, ok } of list) if (ok) { zone[i] = 0; lvl[i] = 0; extinguishSilently(i); }
   } else {
     for (const { i, ok } of list) {
       if (!ok) continue;
       if (curveId[i]) removeCurve(curveId[i]);
+      busStops.delete(i); roadKind[i] = 0;
       if (type[i] === T_SVC) removeService(svcAt[i]); else if (type[i] === T_ROAD) type[i] = T_EMPTY;
       zone[i] = 0; lvl[i] = 0; tree[i] = 0; rubble[i] = 0; extinguishSilently(i);
     }
   }
   navigator.vibrate?.(12);
+  checkBusLines();
   refresh();
 }
 function extinguishSilently(i) { burn[i] = 0; burning.delete(i); }
+function toggleStop(i) {
+  if (type[i] !== T_ROAD) return showToast('Durak sadece yola konur.', { cls: 'info' });
+  if (busStops.has(i)) { busStops.delete(i); showToast('Durak kaldırıldı.', { cls: 'info' }); }
+  else { if (money < 200) return showToast('Yetersiz bütçe!'); busStops.add(i); money -= 200; addXp(3); showToast('🚏 Durak kondu. Hat çizmek için 🗺️ Otobüs Hattı aracını kullan.', { cls: 'ok' }); }
+  checkBusLines(); refresh();
+}
 function addService(kind, x, z, id) {
   const d = SVC[kind], mesh = makeServiceMesh(kind);
   mesh.position.set(x - HALF + d.size / 2, 0, z - HALF + d.size / 2);
@@ -1706,7 +2052,7 @@ function showInfo(c) {
   cardCell = c;
   const i = idx(c.x, c.z); let h;
   if (type[i] === T_WATER) h = '<h3>🌊 Nehir</h3>Su kuleleri kıyıya kurulur.';
-  else if (type[i] === T_ROAD) h = `<h3>🛣️ Yol</h3>Trafik ${meter(dens[i] / 3, false)}<br>Elektrik şebekesi ${net.pR[i] ? '✓' : '✗'} · Su şebekesi ${net.wR[i] ? '✓' : '✗'}`;
+  else if (type[i] === T_ROAD) { const lines = busLines.filter(L => L.stops.includes(i)).map(L => 'Hat ' + L.id); h = `<h3>${roadKind[i] === 2 ? '🛤️ Geniş Cadde' : curveId[i] ? '〰️ Kavisli Yol' : '🛣️ Yol'}</h3>Trafik ${meter(dens[i] / 3, false)}<br>⚡ ${net.pR[i] ? '✓' : '✗'} 💧 ${net.wR[i] ? '✓' : '✗'} 🚿 ${net.sR[i] ? '✓' : '✗'} 🗑️ ${net.gR[i] ? '✓' : '✗'}${busStops.has(i) ? `<br>🚏 Otobüs durağı${lines.length ? ' · ' + lines.join(', ') : ' · henüz hat yok'}` : ''}`; }
   else if (type[i] === T_SVC) {
     const s = services.get(svcAt[i]), d = SVC[s.kind], conn = svcRoads(s).length > 0;
     h = `<h3>${d.icon} ${d.name}</h3>Bakım: ₺${fmt(d.upkeep)}/ay · Yol bağlantısı: ${conn ? '✓' : '✗ <span class="neg">bağla!</span>'}`;
@@ -1715,15 +2061,16 @@ function showInfo(c) {
     if (s.kind === 'park') h += '<br>Çevredeki arazi değerini ve mutluluğu artırır.';
     if (d.radius) h += `<br>Kapsama yarıçapı: ${d.radius} kare`;
   } else if (zone[i] && lvl[i]) {
-    const L = lvl[i], who = zone[i] === Z_R ? `${RES[L]} sakin` : `${(zone[i] === Z_C ? COMJ : INDJ)[L]} çalışan`;
-    h = `<h3>${['', '🏠', '🏬', '🏭'][zone[i]]} ${ZONE_NAME[zone[i]]} · Seviye ${L}</h3>${who}${burn[i] ? ' · <span class="neg">🔥 YANIYOR</span>' : ''}<br>`;
-    h += `⚡ ${served[i] & 1 ? '✓' : '✗'} 💧 ${served[i] & 2 ? '✓' : '✗'} · Arazi değeri ${meter(landValue(i))}<br>`;
+    const L = lvl[i], who = zone[i] === Z_R ? `${RES[L]} sakin` : `${(zone[i] === Z_C ? COMJ : zone[i] === Z_O ? OFFJ : INDJ)[L]} çalışan`;
+    h = `<h3>${ZONE_ICON[zone[i]]} ${ZONE_NAME[zone[i]]} · Seviye ${L}</h3>${who}${burn[i] ? ' · <span class="neg">🔥 YANIYOR</span>' : ''}<br>`;
+    h += `⚡ ${served[i] & 1 ? '✓' : '✗'} 💧 ${served[i] & 2 ? '✓' : '✗'} 🚿 ${served[i] & 4 ? '✓' : '✗'} 🗑️ ${served[i] & 8 ? '✓' : '✗'}<br>Arazi değeri ${meter(landValue(i))} · Kirlilik ${meter(Math.min(1, poll[i] / 8), false)}<br>${cov.transit[i] ? `🚌 Toplu taşıma ${meter(cov.transit[i])}<br>` : ''}`;
     if (zone[i] === Z_R) h += `Mutluluk ${meter(happy[i] / 100)} · Suç ${meter(crime[i], false)}<br>`;
     h += covLine(i);
     if (L < 3) {
       const tip = zone[i] === Z_R ? (L === 1 ? 'Gelişmek için: mutluluk ≥ %45, arazi değeri' : 'Gelişmek için: okul + hastane kapsaması, mutluluk ≥ %60')
-        : zone[i] === Z_C ? (L === 1 ? 'Gelişmek için: nüfus ≥ 200' : 'Gelişmek için: nüfus ≥ 1.200 ve polis') : (L === 1 ? 'Talep oldukça gelişir' : 'Gelişmek için: okul + itfaiye kapsaması');
-      h += `<br><span class="muted">${tip}</span>`;
+        : zone[i] === Z_C ? (L === 1 ? 'Gelişmek için: nüfus ≥ 200' : 'Gelişmek için: nüfus ≥ 1.200 ve polis') : zone[i] === Z_O ? (L === 1 ? 'Gelişmek için: okul kapsaması' : 'Gelişmek için: üniversite kapsaması') : (L === 1 ? 'Talep oldukça gelişir' : 'Gelişmek için: okul + itfaiye kapsaması');
+      const req = L === 1 ? (served[i] & 8 ? '' : ' · 🗑️ çöp toplama gerekli') : (served[i] & 4 ? '' : ' · 🚿 atık su gerekli');
+      h += `<br><span class="muted">${tip}${req}</span>`;
     }
   } else if (zone[i]) {
     const pr = nearMask(i, net.pR), wr = nearMask(i, net.wR);
@@ -1756,6 +2103,13 @@ cv.addEventListener('pointerdown', e => {
   if (!tool) return;
   const c = cellAt(e); if (!c) return;
   hover = c;
+  if (tool === 'busstop') { toggleStop(idx(c.x, c.z)); return; }
+  if (tool === 'busline') {
+    const i = idx(c.x, c.z);
+    if (!busStops.has(i)) return showToast('Hatta sadece duraklar eklenebilir: önce 🚏 durak koy.', { cls: 'info' });
+    if (lineDraft[lineDraft.length - 1] !== i) lineDraft.push(i);
+    showPending(selection(null, c), c); return;
+  }
   if (SVC[tool]) { if (e.pointerType === 'mouse') apply(selection(null, c), c); else showPending(selection(null, c), c); return; }
   if (tool === 'curve' && curveDraft) { bending = true; curveDraft.ctrl = [hit.x, hit.z]; showPending(selection(null, c), c); return; }
   if (pending) cancelPending();
@@ -1825,6 +2179,25 @@ function showToast(msg, o = {}) {
 }
 function setBar(el, d) { const h = Math.abs(d) * 50; el.style.height = h + '%'; el.style.bottom = d >= 0 ? '50%' : (50 - h) + '%'; el.style.opacity = d >= 0 ? 1 : .45; }
 const hasSvc = k => [...services.values()].some(s => s.kind === k);
+function hudMilestone() {
+  const m = MILESTONES[msLevel], nx = MILESTONES[msLevel + 1];
+  $('msName').textContent = `🏆 ${m.name}`;
+  $('msBar').style.width = (nx ? Math.min(100, (xp - m.xp) / (nx.xp - m.xp) * 100) : 100) + '%';
+}
+function renderMilestones() {
+  $('msList').innerHTML = MILESTONES.map((m, k) => {
+    const items = Object.keys(TOOLDEF).filter(t => TOOLDEF[t].ms === k && k > 0).map(t => TOOLDEF[t].icon + ' ' + TOOLDEF[t].name);
+    if (k === POLICY_MS) items.push('🏛️ Politikalar');
+    const st = k <= msLevel ? '✅' : k === msLevel + 1 ? `⏳ ${fmt(xp)}/${fmt(m.xp)} puan` : `🔒 ${fmt(m.xp)} puan`;
+    return `<div class="msRow"><b>${m.name}</b><div><div>${st}${m.reward ? ` · ödül ₺${fmt(m.reward)}` : ''}</div><div class="muted">${items.join(' · ') || 'Başlangıç: yol, imar, santral, su, park'}</div></div></div>`;
+  }).join('');
+}
+function renderPolicies() {
+  const el = $('policyList'); if (!el) return;
+  if (msLevel < POLICY_MS) { el.textContent = `🔒 "${MILESTONES[POLICY_MS].name}" kilometre taşında açılır.`; return; }
+  el.innerHTML = Object.entries(POLICIES).map(([k, p]) => `<div class="pol"><button data-pol="${k}" class="${policies.has(k) ? 'on' : ''}">${policies.has(k) ? 'Açık' : 'Kapalı'}</button><div><b>${p.icon} ${p.name}</b> <span class="muted">₺${fmt(p.upkeep)}/ay</span><div class="muted">${p.desc}</div></div></div>`).join('');
+  el.querySelectorAll('[data-pol]').forEach(b => b.onclick = () => { const k = b.dataset.pol; policies.has(k) ? policies.delete(k) : policies.add(k); refresh(); });
+}
 function hud() {
   if (!type) return;
   $('money').textContent = '₺' + fmt(money); $('money').className = money < 0 ? 'neg' : '';
@@ -1833,8 +2206,9 @@ function hud() {
   $('pop').textContent = fmt(stats.pop);
   $('happy').textContent = stats.pop ? '%' + Math.round(stats.happy) : '—';
   $('happy').className = !stats.pop ? '' : stats.happy < 40 ? 'neg' : stats.happy > 65 ? 'pos' : '';
-  $('date').textContent = `${MONTHS[month % 12]} ${Math.floor(month / 12) + 1}`;
-  setBar($('dR'), demand.r); setBar($('dC'), demand.c); setBar($('dI'), demand.i);
+  $('date').textContent = `${SEASON_ICON[SEASON_OF[month % 12]]} ${MONTHS[month % 12]} ${Math.floor(month / 12) + 1}`;
+  setBar($('dR'), demand.r); setBar($('dC'), demand.c); setBar($('dI'), demand.i); setBar($('dO'), demand.o);
+  hudMilestone();
   $('taxv').textContent = '%' + tax;
   const w = [];
   if (!services.size) w.push('Önce ⚡ Santral ve 💧 Su Kulesi kur.');
@@ -1844,6 +2218,8 @@ function hud() {
     if (net.pCap && net.pUsed >= net.pCap - 2) w.push('⚡ Elektrik kapasitesi doldu.');
     if (net.wCap && net.wUsed >= net.wCap - 2) w.push('💧 Su kapasitesi doldu.');
     if (stats.unserved) w.push(`${stats.unserved} bina elektrik/su alamıyor.`);
+    if (msLevel >= 1 && stats.noGarbage > 3) w.push(net.gCap ? `🗑️ ${stats.noGarbage} binanın çöpü toplanmıyor.` : '🗑️ Çöp sahası yok: binalar gelişemiyor.');
+    if (msLevel >= 4 && stats.noSewage > 3) w.push(net.sCap ? `🚿 ${stats.noSewage} bina atık suya bağlı değil.` : '🚿 Atık su tesisi yok: binalar 3. seviyeye çıkamıyor.');
     if (stats.pop > 300 && !hasSvc('police')) w.push('👮 Suç artıyor: polis karakolu kur.');
     if (stats.pop > 300 && !hasSvc('fire')) w.push('🚒 Yangın riski: itfaiye kur.');
     if (stats.pop > 600 && !hasSvc('school')) w.push('🏫 Okul yok: binalar gelişemiyor.');
@@ -1853,8 +2229,9 @@ function hud() {
   $('warn').innerHTML = w.slice(0, 3).map(s => '⚠ ' + s).join('<br>');
   $('warn').classList.toggle('hidden', !w.length || !!tool);
   let up = 0; for (const s of services.values()) up += SVC[s.kind].upkeep;
-  let roads = 0; for (let i = 0; i < NN; i++) if (type[i] === T_ROAD) roads++;
-  $('budget').innerHTML = `<table><tr><td>Vergi geliri</td><td class="pos">+₺${fmt(lastIncome)}</td></tr><tr><td>Hizmet bakımı</td><td class="neg">−₺${fmt(up)}</td></tr><tr><td>Yol bakımı</td><td class="neg">−₺${fmt(roads)}</td></tr></table>`;
+  const tour = tourismIncome();
+  $('budget').innerHTML = `<table><tr><td>Vergi geliri</td><td class="pos">+₺${fmt(lastIncome - tour)}</td></tr>${tour ? `<tr><td>Turizm</td><td class="pos">+₺${fmt(tour)}</td></tr>` : ''}<tr><td>Hizmet bakımı</td><td class="neg">−₺${fmt(up)}</td></tr><tr><td>Yol bakımı</td><td class="neg">−₺${fmt(roadUpkeep())}</td></tr><tr><td>Otobüsler</td><td class="neg">−₺${fmt(busUpkeep())}</td></tr><tr><td>Politikalar</td><td class="neg">−₺${fmt(policyUpkeep())}</td></tr></table>`;
+  renderPolicies();
 }
 function setSpeed(s) { speed = s; document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('on', +b.dataset.speed === s)); }
 document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => setSpeed(+b.dataset.speed));
@@ -1863,6 +2240,9 @@ $('taxp').onclick = () => { tax = Math.min(25, tax + 1); computeStats(); compute
 $('hintClose').onclick = () => { $('hint').classList.add('hidden'); store.set('kk.seen', '1'); };
 $('menuBtn').onclick = () => { hud(); $('menu').classList.remove('hidden'); };
 $('menuClose').onclick = () => $('menu').classList.add('hidden');
+$('msChip').onclick = () => { renderMilestones(); $('msModal').classList.remove('hidden'); };
+$('msClose').onclick = () => $('msModal').classList.add('hidden');
+$('msModal').onclick = e => { if (e.target.id === 'msModal') $('msModal').classList.add('hidden'); };
 $('menu').onclick = e => { if (e.target.id === 'menu') $('menu').classList.add('hidden'); };
 $('help').onclick = () => { $('menu').classList.add('hidden'); $('hint').classList.remove('hidden'); };
 $('fs').onclick = () => { const d = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : d.requestFullscreen?.())?.catch?.(() => {}); };
@@ -1876,7 +2256,8 @@ function save(auto = false) {
   const data = { v: 2, money, month, tax, nextSvc, dayT,
     type: Array.from(type), zone: Array.from(zone), lvl: Array.from(lvl), tree: Array.from(tree),
     services: [...services.values()].map(({ id, kind, x, z }) => ({ id, kind, x, z })),
-    curves: [...curves.values()].map(({ id, p0, p1, p2, tiles, ts }) => ({ id, p0, p1, p2, tiles, ts })), nextCurve };
+    curves: [...curves.values()].map(({ id, p0, p1, p2, tiles, ts }) => ({ id, p0, p1, p2, tiles, ts })), nextCurve,
+    xp, policies: [...policies], roadKind: Array.from(roadKind), busStops: [...busStops], busLines: busLines.map(({ id, stops, color }) => ({ id, stops, color })), nextLine };
   const ok = store.set('kentkurucu.save', JSON.stringify(data));
   if (!auto) showToast(ok ? 'Şehir kaydedildi.' : 'Kaydedilemedi (tarayıcı depolaması kapalı).', { cls: ok ? 'ok' : '' });
 }
@@ -1889,7 +2270,13 @@ function load(silent = false) {
   for (const s of d.services) addService(s.kind, s.x, s.z, s.id);
   for (const c of d.curves || []) { c.tiles.forEach((i, k) => { if (type[i] === T_ROAD && !curveId[i]) { curveId[i] = c.id; curveT[i] = c.ts[k]; } }); addCurve(c); }
   nextCurve = d.nextCurve || nextCurve;
-  paintGround(); refresh();
+  if (d.roadKind) roadKind = Uint8Array.from(d.roadKind);
+  for (const st of d.busStops || []) busStops.add(st);
+  for (const L of d.busLines || []) busLines.push({ ...L, path: null, buses: 0, ok: false });
+  nextLine = d.nextLine || busLines.length + 1;
+  for (const k of d.policies || []) policies.add(k);
+  xp = 0; msLevel = 0; addXpSilent(d.xp ?? Math.round((d.month || 0) * 4));
+  paintGround(); checkBusLines(); refresh();
   if (!silent) showToast('Şehir yüklendi.', { cls: 'ok' });
   return true;
 }
@@ -1932,7 +2319,12 @@ async function loadAssets() {
   await Promise.all(jobs);
   $('loadMsg').textContent = 'Şehir inşa ediliyor…';
   await new Promise(r => setTimeout(r, 30));
-  buildMaterials(); buildMeshes(); buildTerrain(); buildScenery(); updateDay(0); updateEnv();
+  buildMaterials(); buildMeshes(); buildTerrain(); buildScenery();
+  MATS.forEach((m, k) => addSnow(m, k === M.LEAF ? .6 : k === M.PAVE ? .7 : 1)); addSnow(roadM.material, .35); addSnow(walkM.material, .7); addSnow(cornerM.material, .7);
+  { const n = 1500, pos = new Float32Array(n * 3); for (let k = 0; k < n; k++) { pos[k * 3] = (Math.random() - .5) * 40; pos[k * 3 + 1] = Math.random() * 18; pos[k * 3 + 2] = (Math.random() - .5) * 40; }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    snowPts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: .07, transparent: true, opacity: .85, depthWrite: false })); snowPts.visible = false; scene.add(snowPts); }
+  updateDay(0); updateEnv();
 }
 
 buildBar();
@@ -1956,6 +2348,7 @@ applyQuality();
     screen(x, z) { const v = new THREE.Vector3(wx(x), 0, wx(z)).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; },
     river(z) { for (let x = 0; x < N; x++) if (type[idx(x, z)] === T_WATER) return x; return -1; },
     get dbg() { return { scene, renderer, sky, clouds, hills, water, ground, envScene, VM, PM, setQuality: q => { quality = q; applyQuality(); }, updateEnv }; },
+    addXp, policy: k => { policies.add(k); refresh(); }, get xp() { return xp; }, get ms() { return msLevel; }, get lines() { return busLines.map(L => ({ id: L.id, ok: L.ok, buses: L.buses, stops: L.stops.length })); }, setMonth: m => { month = m; rebuild(); hud(); },
     loop(on) { renderer.setAnimationLoop(on ? frame : null); if (on) clock.getDelta(); },
     quality(q) { quality = q; applyQuality(); },
     lookAt(x, z, dist = 14, height = 10) { controls.target.set(wx(x), 0, wx(z)); camera.position.set(wx(x) - dist * .6, height, wx(z) + dist); camera.lookAt(controls.target); camera.updateMatrixWorld(); },
