@@ -106,6 +106,15 @@
   <h1>🏙️ Kent Kurucu</h1>
   <div id="loadTrack"><div id="loadBar"></div></div>
   <div id="loadMsg">Şehir yükleniyor…</div>
+  <script>
+    (function () {
+      var shown = false;
+      function say(m) { var el = document.getElementById('loadMsg'), ld = document.getElementById('loading'); if (el && ld && !ld.classList.contains('hidden')) { el.innerHTML = '⚠ ' + m; shown = true; } }
+      window.addEventListener('error', function (e) { say('Hata: ' + (e.message || (e.target && (e.target.src || e.target.href)) || 'bilinmeyen')); }, true);
+      window.addEventListener('unhandledrejection', function (e) { say('Hata: ' + (e.reason && e.reason.message || e.reason)); });
+      setTimeout(function () { if (!shown && !window.__kent) say('Oyun 25 saniyede açılamadı. Sayfayı yenilemeyi dene; tekrar olursa bu ekranın görüntüsünü gönder.'); }, 25000);
+    })();
+  </script>
 </div>
 
 <div id="hud">
@@ -335,7 +344,8 @@ let toLoad = 0, loaded = 0;
 function progress() { $('loadBar').style.width = Math.round(loaded / Math.max(1, toLoad) * 100) + '%'; }
 const IMG = {};
 const TEXNAMES = ['grass', 'sand', 'forest', 'asphalt', 'pavers', 'brick', 'beige', 'plaster', 'greyplaster', 'stonetile', 'metalsheet', 'roofclay', 'roofgrey', 'gravel'];
-function loadImg(url) { toLoad++; return new Promise((res, rej) => { const im = new Image(); im.onload = () => { loaded++; progress(); res(im); }; im.onerror = () => rej(new Error('img ' + url)); im.src = url; }); }
+const EMBED = window.KK_EMBED || null;
+function loadImg(url) { toLoad++; return new Promise((res, rej) => { const im = new Image(); im.onload = () => { loaded++; progress(); res(im); }; im.onerror = () => rej(new Error('Görsel yüklenemedi: ' + url)); im.src = EMBED?.img?.[url] || url; }); }
 function texFrom(src, srgb = true, rep = 1) {
   const t = src instanceof HTMLCanvasElement ? new THREE.CanvasTexture(src) : new THREE.Texture(src);
   t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = ANISO; t.repeat.set(rep, rep);
@@ -780,8 +790,16 @@ function buildMeshes() {
   const carMat = new THREE.MeshStandardMaterial({ map: CARTEX, roughness: .42, metalness: .25 });
   for (const name of [...CIV, ...TRUCKS, ...SPECIAL]) {
     const d = CARS[name], g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(d.p, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(d.n, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(d.uv, 2)); g.setIndex(d.i);
+    if (d.pb) {   // packed: int16 positions (/1000), int8 normals (/127), uint16 uvs (/65535), uint16 indices
+      const b64 = (str, T) => { const bin = atob(str), u8 = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) u8[k] = bin.charCodeAt(k); return new T(u8.buffer); };
+      g.setAttribute('position', new THREE.Float32BufferAttribute(Float32Array.from(b64(d.pb, Int16Array), v => v / 1000), 3));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute(Float32Array.from(b64(d.nb, Int8Array), v => v / 127), 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(Float32Array.from(b64(d.ub, Uint16Array), v => v / 65535), 2));
+      g.setIndex(new THREE.BufferAttribute(b64(d.ib, Uint16Array), 1));
+    } else {
+      g.setAttribute('position', new THREE.Float32BufferAttribute(d.p, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(d.n, 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(d.uv, 2)); g.setIndex(d.i);
+    }
     g.scale(CAR_SCALE, CAR_SCALE, CAR_SCALE); g.rotateY(CAR_FLIP); g.computeBoundingSphere();
     VM[name] = mkInst(g, carMat, SPECIAL.includes(name) ? 40 : 200);
     if (CIV.includes(name) || TRUCKS.includes(name)) PM[name] = mkInst(g, carMat, 1200);
@@ -1909,7 +1927,7 @@ function frame() {
 async function loadAssets() {
   const jobs = TEXNAMES.map(async n => { const [diff, nor] = await Promise.all([loadImg(`${ASSET}tex/${n}_diff.jpg`), loadImg(`${ASSET}tex/${n}_nor.jpg`)]); IMG[n] = { diff, nor }; });
   toLoad++;
-  jobs.push(fetch(ASSET + 'cars/cars.json').then(r => { if (!r.ok) throw new Error('cars'); return r.json(); }).then(j => { CARS = j; loaded++; progress(); }));
+  jobs.push((EMBED?.cars ? Promise.resolve(EMBED.cars) : fetch(ASSET + 'cars/cars.json').then(r => { if (!r.ok) throw new Error('Araç dosyası yüklenemedi'); return r.json(); })).then(j => { CARS = j; loaded++; progress(); }));
   jobs.push(loadImg(ASSET + 'cars/colormap.png').then(im => { CARTEX = new THREE.Texture(im); CARTEX.needsUpdate = true; CARTEX.flipY = false; CARTEX.colorSpace = THREE.SRGBColorSpace; CARTEX.magFilter = CARTEX.minFilter = THREE.NearestFilter; CARTEX.generateMipmaps = false; }));
   await Promise.all(jobs);
   $('loadMsg').textContent = 'Şehir inşa ediliyor…';
