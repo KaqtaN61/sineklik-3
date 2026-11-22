@@ -1,0 +1,1 @@
+Textures from Poly Haven (polyhaven.com), CC0: leafy_grass, coast_sand_01, asphalt_02, concrete_pavers, brick_wall_02, beige_wall_001, plastered_wall_02, grey_plaster, clay_roof_tiles_02, grey_roof_tiles, box_profile_metal_sheet, gravel_ground_01, rectangular_facade_tiles, forest_leaves_02. Downscaled to 512px.
