@@ -124,6 +124,11 @@
   .row button.on { background:rgba(90,180,214,.2); border-color:var(--acc); }
   .big { width:100%; min-height:48px; font-size:16px; margin-top:6px; }
   .muted { color:var(--muted); font-size:13px; }
+  .chart { margin:8px 0 14px; } .chart h4 { font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.5px; text-transform:uppercase; display:flex; justify-content:space-between; }
+  .chart h4 b { color:var(--fg); font-size:14px; letter-spacing:0; text-transform:none; font-variant-numeric:tabular-nums; }
+  .chart svg { width:100%; height:70px; display:block; margin-top:4px; }
+  .sgrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:6px 16px; margin:6px 0 12px; font-size:13px; }
+  .sgrid div { display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding:3px 0; } .sgrid span { color:var(--muted); } .sgrid b { font-variant-numeric:tabular-nums; }
   table { width:100%; border-collapse:collapse; font-size:13px; } td { padding:2px 0; } td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
 
   @media (min-width:900px) { #left { top:calc(64px + var(--st)); } #toast { top:calc(64px + var(--st)); } }
@@ -154,7 +159,7 @@
 
 <div id="hud">
   <div class="chip panel"><span class="ms">payments</span><b id="money">₺0</b><small id="flow"></small></div>
-  <div class="chip panel"><span class="ms">groups</span><b id="pop">0</b></div>
+  <button class="chip panel" id="popChip" title="İstatistikler"><span class="ms">groups</span><b id="pop">0</b></button>
   <div class="chip panel"><span class="ms">sentiment_satisfied</span><b id="happy">—</b></div>
   <div class="chip panel"><span class="ms" id="wIc">sunny</span><b id="date"></b></div>
   <div class="chip panel" id="rci" title="Talep: Konut / Ticari / Sanayi / Ofis">
@@ -216,6 +221,14 @@
     <p class="muted">Vatandaşların şehir hakkında yazdıkları. Sorunları ilk buradan duyarsın.</p>
     <div id="feedList"></div>
     <button class="big" id="feedClose">Kapat</button>
+  </div>
+</div>
+
+<div id="stats" class="modal hidden">
+  <div class="panel" style="width:min(560px,100%)">
+    <h2>Şehir İstatistikleri</h2>
+    <div id="statsBody"></div>
+    <button class="big" id="statsClose">Kapat</button>
   </div>
 </div>
 
@@ -1829,7 +1842,7 @@ function newGame(seed = (Math.random() * 1e9) | 0) {
     if (f > 0.55 && hash(x, z, seed) < 0.85) tree[i] = 1;
   }
   ensureHighway();
-  money = 80000; month = 0; tax = 9; dayT = 0.12; questIdx = 0; sandbox = false; undoStack.length = 0; syncUndo(); syncSandbox(); hudMilestone();
+  money = 80000; month = 0; tax = 9; dayT = 0.12; questIdx = 0; hist = { pop: [], money: [], happy: [], flow: [] }; sandbox = false; undoStack.length = 0; syncUndo(); syncSandbox(); hudMilestone();
   paintGround(); refresh();
   if (ready) showToast('🛣️ Şehrin otoyola bağlı olmalı: yolunu otoyol çıkışına (⤵) bağla, göçmenler oradan gelir.', { cls: 'info', ms: 7000 });
 }
@@ -2405,9 +2418,36 @@ function simTick() {
   }
   rebuild(); hud(); if (cardCell) showInfo(cardCell);
   if (lastIncome - lastExpense > 0) SFX.coin();
+  recordHistory();
   checkQuests(); citizenChatter();
 }
 let checkQuestsSoon = false;
+// ---- history for the statistics charts (one sample per month)
+let hist = { pop: [], money: [], happy: [], flow: [] };
+function recordHistory() { const H = hist; H.pop.push(stats.pop); H.money.push(Math.round(money)); H.happy.push(Math.round(stats.happy)); H.flow.push(lastIncome - lastExpense); for (const k in H) if (H[k].length > 240) H[k].shift(); }
+function chartSvg(arr, col, fmtv) {
+  if (arr.length < 2) return '<p class="muted">Veri birikiyor…</p>';
+  const W = 520, Hh = 70, lo = Math.min(0, ...arr), hi = Math.max(1, ...arr), sx = W / (arr.length - 1), sy = v => Hh - 4 - (v - lo) / (hi - lo || 1) * (Hh - 8);
+  const pts = arr.map((v, k) => `${(k * sx).toFixed(1)},${sy(v).toFixed(1)}`).join(' ');
+  const zero = lo < 0 ? `<line x1="0" x2="${W}" y1="${sy(0)}" y2="${sy(0)}" stroke="rgba(255,255,255,.15)" stroke-dasharray="3 3"/>` : '';
+  return `<svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none"><polygon points="0,${Hh} ${pts} ${W},${Hh}" fill="${col}" fill-opacity=".14"/>${zero}<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/><circle cx="${(arr.length - 1) * sx}" cy="${sy(arr[arr.length - 1])}" r="3" fill="${col}"/></svg>`;
+}
+function renderStats() {
+  let roads = 0, lv = [0, 0, 0, 0], bz = [0, 0, 0, 0, 0], dsum = 0, dn = 0, pol = 0, pn = 0;
+  for (let i = 0; i < NN; i++) { if (type[i] === T_ROAD && roadKind[i] !== K_HWY) { roads++; dsum += dens[i]; dn++; } if (lvl[i]) { pol += poll[i]; pn++; } }
+  for (const l of lots.values()) { lv[l.lvl]++; bz[l.zone]++; }
+  const jobs = stats.jC + stats.jI + stats.jO, last = a => a.length ? a[a.length - 1] : 0;
+  const row = (k, v) => `<div><span>${k}</span><b>${v}</b></div>`;
+  $('statsBody').innerHTML =
+    `<div class="chart"><h4>Nüfus <b>${fmt(stats.pop)}</b></h4>${chartSvg(hist.pop, '#7cc46b')}</div>` +
+    `<div class="chart"><h4>Kasa <b>₺${fmt(money)}</b></h4>${chartSvg(hist.money, '#e0b54a')}</div>` +
+    `<div class="chart"><h4>Aylık net gelir <b>${last(hist.flow) >= 0 ? '+' : ''}₺${fmt(last(hist.flow))}</b></h4>${chartSvg(hist.flow, '#5ab4d6')}</div>` +
+    `<div class="chart"><h4>Mutluluk <b>${stats.pop ? '%' + Math.round(stats.happy) : '—'}</b></h4>${chartSvg(hist.happy, '#c98bd6')}</div>` +
+    `<div class="sgrid">${row('İş yeri', fmt(jobs))}${row('İşsizlik', stats.pop ? '%' + Math.max(0, Math.round((1 - jobs / Math.max(1, stats.pop * .55)) * 100)) : '—')}${row('Ticari iş', fmt(stats.jC))}${row('Sanayi iş', fmt(stats.jI))}${row('Ofis iş', fmt(stats.jO))}${row('Konut binası', fmt(bz[Z_R]))}${row('Ticari bina', fmt(bz[Z_C]))}${row('Sanayi binası', fmt(bz[Z_I]))}${row('Ofis binası', fmt(bz[Z_O]))}${row('Seviye 1 / 2 / 3', `${lv[1]} / ${lv[2]} / ${lv[3]}`)}${row('Yol uzunluğu', (roads * 16 / 1000).toFixed(1) + ' km')}${row('Trafik yoğunluğu', '%' + Math.round(Math.min(1, (dn ? dsum / dn : 0) / 2) * 100))}${row('Ortalama kirlilik', (pn ? pol / pn : 0).toFixed(1))}${row('Hizmet binası', fmt([...services.values()].filter(s => !SVC[s.kind].hidden).length))}${row('Otobüs hattı', fmt(busLines.filter(L => L.ok).length))}${row('Hava', WEATHER_NAME[weather])}</div>`;
+}
+$('popChip').onclick = () => { renderStats(); $('stats').classList.remove('hidden'); };
+$('statsClose').onclick = () => $('stats').classList.add('hidden');
+$('stats').onclick = e => { if (e.target.id === 'stats') $('stats').classList.add('hidden'); };
 function fixRoundabouts() {
   for (let i = 0; i < NN; i++) if (roadKind[i] === K_ROUND) {
     const x = i % N, z = (i / N) | 0; let ok = false;
@@ -3208,7 +3248,7 @@ function serialize() {
     services: [...services.values()].map(({ id, kind, x, z }) => ({ id, kind, x, z })),
     curves: [...curves.values()].map(({ id, p0, p1, p2, tiles, ts }) => ({ id, p0, p1, p2, tiles, ts })), nextCurve,
     lots: [...lots.values()].map(({ id, zone, lvl, W, D, dir, tiles }) => ({ id, zone, lvl, W, D, dir, tiles })), nextLot,
-    questIdx, xp, policies: [...policies], roadKind: Array.from(roadKind), busStops: [...busStops], busLines: busLines.map(({ id, stops, color }) => ({ id, stops, color })), nextLine };
+    hist, questIdx, xp, policies: [...policies], roadKind: Array.from(roadKind), busStops: [...busStops], busLines: busLines.map(({ id, stops, color }) => ({ id, stops, color })), nextLine };
 }
 function save(auto = false) {
   const data = serialize();
@@ -3240,7 +3280,7 @@ function restore(d) {
   for (const L of d.busLines || []) busLines.push({ ...L, path: null, buses: 0, ok: false });
   nextLine = d.nextLine || busLines.length + 1;
   for (const k of d.policies || []) policies.add(k);
-  questIdx = d.questIdx ?? 0;
+  questIdx = d.questIdx ?? 0; hist = d.hist || { pop: [], money: [], happy: [], flow: [] };
   xp = 0; msLevel = 0; addXpSilent(d.xp ?? Math.round((d.month || 0) * 4));
   paintGround(); checkBusLines(); refresh(); syncSandbox();
 }
