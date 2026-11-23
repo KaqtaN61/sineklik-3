@@ -1074,6 +1074,76 @@ function qIndustry(r, W, D, L) {
   if (L === 3) for (let k = 0; k < 3; k++) cyl(.1, .1, .6, -W / 2 + .2 + k * .22, .02, -D / 2 + .16, M.TRIM, 0xcfd2d4, 16);
   for (let k = 0; k < 2 + (r() * 3 | 0); k++) box(.24, .1, .1, W / 2 - .25, .02 + (k % 2) * .1, D / 2 - .2 - (k >> 1) * .12, M.PAINT, pick(r, [0x2f5d80, 0x8a3a2e, 0x3c6043, 0xa3843c, 0x5b6168]));
 }
+// Public buildings from the real-model kit. Footprint ±size/2 tiles, front toward +z (the street).
+function qAt(x, z, fn) { const k0 = PARTS.length; fn(); for (let k = k0; k < PARTS.length; k++) PARTS[k][0].translate(x * MU, .02, z * MU); }   // x, z in metres
+function sign(x, y, z, w, col, h = .9) { box(w * MU, h * MU, .15 * MU, x * MU, y * MU, z * MU, M.PAINT, col); box(w * .8 * MU, h * .25 * MU, .17 * MU, x * MU, (y + h * .38) * MU, z * MU, M.PAINT, 0xffffff); }
+function garageDoors(n, x0, z, col = 0xa8281f) { for (let k = 0; k < n; k++) { box(3.6 * MU, 3.4 * MU, .12 * MU, (x0 + k * 4.6) * MU, .02, (z + .08) * MU, M.PAINT, col); for (let j = 1; j < 6; j++) box(3.6 * MU, .05 * MU, .14 * MU, (x0 + k * 4.6) * MU, .02 + j * .58 * MU, (z + .09) * MU, M.TRIM, 0x6d1a14); } }
+function helipad(x, y, z, r = 5) { const g = new THREE.CylinderGeometry(r * MU, r * MU, .2 * MU, 28); g.translate(x * MU, y * MU + .02, z * MU); addPart(g, M.DARK, 0x2f3338); box(r * 1.1 * MU, .05 * MU, .6 * MU, x * MU, (y + .22) * MU + .02, z * MU, M.TRIM, 0xffffff); box(.6 * MU, .05 * MU, r * 1.1 * MU, (x - r * .3) * MU, (y + .22) * MU + .02, z * MU, M.TRIM, 0xffffff); box(.6 * MU, .05 * MU, r * 1.1 * MU, (x + r * .3) * MU, (y + .22) * MU + .02, z * MU, M.TRIM, 0xffffff); }
+function flag(x, z, h = 9, col = 0xd62828) { cyl(.006, .006, h * MU, x * MU, .02, z * MU, M.TRIM, 0xdddddd, 5); box(1.6 * MU, 1 * MU, .05 * MU, (x + .8) * MU, .02 + (h - 1.2) * MU, z * MU, M.PAINT, col); }
+function plaza(W, D, z0, z1) { box(W - .04, .006, z1 - z0, 0, .021, (z0 + z1) / 2, M.PAVE); }
+function court(x, z, w, d, col = 0xb5523b) { box(w * MU, .02, d * MU, x * MU, .02, z * MU, M.TRIM, col); box((w - 3) * MU, .025, (d - 3) * MU, x * MU, .02, z * MU, M.LAWN); box(.25 * MU, .03, (d - 3) * MU, x * MU, .02, z * MU, M.TRIM, 0xffffff); }
+const QSVC = {
+  policepost(r) { box(.98, .02, .98, 0, 0, 0, M.PAVE); qAt(0, -1.5, () => qBuilding(r, 12, 9, 2, 'stone', 'office', { mansard: false })); box(12.2 * MU, .9 * MU, 9.2 * MU, 0, .02 + 2.4 * MU, -1.5 * MU, M.PAINT, 0x23407a); sign(0, 6.6, 3.1, 5, 0x23407a); parking(-.45, .45, .27, .47); flag(5.5, 5); },
+  police(r) {
+    box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
+    qAt(0, -4, () => qBuilding(r, 26, 14, 3, 'stone', 'office', { mansard: false })); box(26.2 * MU, 1 * MU, 14.2 * MU, 0, .02 + 2.4 * MU, -4 * MU, M.PAINT, 0x23407a);
+    sign(0, 10, 3.1, 9, 0x23407a, 1.2); parking(-.9, .9, .4, .95); flag(-11, 12); flag(-9, 12, 9, 0x23407a);
+  },
+  policehq(r) {
+    box(2.96, .02, 2.96, 0, 0, 0, M.PAVE);
+    qAt(0, -8, () => qBuilding(r, 40, 18, 6, 'stone', 'office', { mansard: false })); box(40.2 * MU, 1.1 * MU, 18.2 * MU, 0, .02 + 2.4 * MU, -8 * MU, M.PAINT, 0x23407a);
+    helipad(8, 18.3, -8, 6); sign(0, 19, 1.2, 14, 0x23407a, 1.6); parking(-1.4, 1.4, .3, 1.45); flag(-17, 20); flag(-14, 20, 10, 0x23407a);
+  },
+  firepost(r) { box(.98, .02, .98, 0, 0, 0, M.PAVE); qAt(0, -1, () => qBuilding(r, 12, 10, 2, 'brick', 'office', { mansard: false })); garageDoors(2, -2.3, 4); sign(0, 6.6, 4.1, 5, 0xb0261c); box(.5, .004, .36, 0, .021, .3, M.TRIM, 0x8e9196); },
+  fire(r) {
+    box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
+    qAt(-2, -3, () => qBuilding(r, 22, 14, 2, 'brick', 'office', { mansard: false })); garageDoors(4, -8.9, 4);
+    qAt(11, -6, () => qBuilding(r, 4, 4, 6, 'brick', 'res', { mansard: false })); sign(-2, 6.6, 4.1, 8, 0xb0261c, 1.1);
+    box(1.4, .004, .5, -.12, .021, .7, M.TRIM, 0x8e9196); flag(13, 13);
+  },
+  firehq(r) {
+    box(2.96, .02, 2.96, 0, 0, 0, M.PAVE);
+    qAt(-3, -6, () => qBuilding(r, 34, 18, 3, 'brick', 'office', { mansard: false })); garageDoors(6, -15.5, 3);
+    qAt(17, -14, () => qBuilding(r, 6, 6, 8, 'brick', 'res', { mansard: false })); sign(-3, 9.8, 3.1, 12, 0xb0261c, 1.4);
+    helipad(10, 0, 14, 7); box(2.2, .004, .6, -.25, .021, .55, M.TRIM, 0x8e9196);
+    box(.09, .06, .22, 10 * MU, .06, 14 * MU, M.PAINT, 0xc4221f); box(.4, .006, .02, 10 * MU, .13, 14 * MU, M.TRIM, 0x333333); box(.02, .006, .4, 10 * MU, .13, 14 * MU, M.TRIM, 0x333333);
+  },
+  kinder(r) {
+    lot(M.LAWN); qAt(-2, -2.5, () => qBuilding(r, 10, 8, 1, 'pale', 'res', { mansard: true, tint: 0xfff0d0 }));
+    box(.3, .02, .26, .22, .02, .24, M.TRIM, 0xe3cf9a); for (const [c, x] of [[0xe8664f, .14], [0x3fa7d6, .3]]) { box(.025, .09, .025, x, .02, .2, M.PAINT, c); const g = new THREE.BoxGeometry(.04, .006, .16); g.rotateX(.6); g.translate(x, .065, .27); addPart(g, M.PAINT, 0xf2c94c); }
+    fence(1, 1, 0xf4f1ea, false); blob(.08, -.36, .18, .32, 0x4f8a3a, 9); sign(-2, 4.2, 1.6, 4, 0xe0a82e, .8);
+  },
+  school(r) {
+    box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
+    qAt(-1, -9, () => qBuilding(r, 28, 10, 3, 'brick', 'res', { mansard: false })); qAt(-11, 1, () => qBuilding(r, 8, 12, 3, 'brick', 'office', { mansard: false }));
+    court(5, 6, 18, 12); sign(-1, 9.6, -3.9, 8, 0x274f8a, 1.1); flag(14, 13);
+  },
+  highschool(r) {
+    box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
+    qAt(0, -9, () => qBuilding(r, 30, 10, 4, 'pale', 'res', { mansard: true })); qAt(11, 1, () => qBuilding(r, 8, 12, 3, 'pale', 'office', { mansard: false }));
+    court(-5, 6, 20, 12, 0xa5482f); sign(0, 12.6, -3.9, 9, 0x274f8a, 1.1); flag(-14, 13);
+  },
+  univ(r) {
+    box(2.96, .02, 2.96, 0, 0, 0, M.LAWN);
+    qAt(0, -15, () => qBuilding(r, 34, 14, 5, 'stone', 'res', { mansard: true })); for (const x of [-17, 17]) qAt(x, 2, () => qBuilding(r, 10, 20, 4, 'stone', 'office', { mansard: true }));
+    box(.2, .006, 1.7, 0, .021, .62, M.PAVE); box(1.2, .006, .2, 0, .021, .62, M.PAVE);
+    for (const [x, z] of [[-.42, .3], [.42, .3], [-.42, 1.05], [.42, 1.05]]) { cyl(.014, .02, .16, x, .02, z, M.TRIM, 0x5a4632, 6); blob(.12, x, .24, z, 0x4b8a36, Math.round(x * 30 + z * 9)); }
+    sign(0, 16, -7.9, 12, 0x5f1f2a, 1.3);
+  },
+  clinic(r) { box(.98, .02, .98, 0, 0, 0, M.PAVE); qAt(0, -1.5, () => qBuilding(r, 12, 9, 2, 'stone', 'office', { mansard: false, tint: 0xf4f4f4 })); box(2 * MU, .6 * MU, .2 * MU, 0, .02 + 4.9 * MU, 3.1 * MU, M.PAINT, 0x2fa84f); box(.6 * MU, 2 * MU, .2 * MU, 0, .02 + 4.2 * MU, 3.1 * MU, M.PAINT, 0x2fa84f); parking(-.45, .45, .27, .47); },
+  hospital(r) {
+    box(2.96, .02, 2.96, 0, 0, 0, M.PAVE);
+    qAt(0, -10, () => qBuilding(r, 36, 16, 7, 'stone', 'office', { mansard: false, tint: 0xf6f6f6 })); qAt(-14, 6, () => qBuilding(r, 12, 14, 3, 'stone', 'office', { mansard: false, tint: 0xf6f6f6 }));
+    helipad(8, 21.3, -10, 6); box(3.5 * MU, 1 * MU, .2 * MU, 0, .02 + 18 * MU, -1.8 * MU, M.PAINT, 0xd62828); box(1 * MU, 3.5 * MU, .2 * MU, 0, .02 + 16.8 * MU, -1.8 * MU, M.PAINT, 0xd62828);
+    parking(.1, 1.45, .1, 1.45); box(.9 * 16 * MU, .2 * MU, 4 * MU, 0, .02 + 3.2 * MU, .2 * MU, M.TRIM, 0xe8eaec);
+  },
+  post(r) { box(.98, .02, .98, 0, 0, 0, M.PAVE); qAt(0, -1.5, () => qBuilding(r, 12, 9, 2, 'pale', 'shop', { mansard: true })); sign(0, 3.4, 3.15, 5, 0xe0b028, .8); box(.05, .1, .05, .35, .02, .38, M.PAINT, 0xe0b028); },
+  depot(r) {
+    box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
+    qAt(0, -7, () => qBuilding(r, 28, 14, 2, 'loft', 'office', { mansard: false })); garageDoors(5, -9.2, 0, 0x5b6168);
+    for (let k = 0; k < 3; k++) { box(.13, .11, .44, -.4 + k * .4, .03, .55, M.PAINT, [0xe63946, 0x2a9d8f, 0xf4a261][k]); box(.135, .04, .4, -.4 + k * .4, .09, .55, M.DARK, 0x1b232c); }
+  },
+};
 // ============================================================ Parcel (lot) buildings
 // A lot is W tiles of street frontage × D tiles deep. Local frame: x along the street, front edge at z = +D/2.
 function at(ox, oz, fn) {   // run a 1×1 generator shifted to another tile of the lot
@@ -2037,7 +2107,7 @@ function badge(icon) {
 const svcGeoCache = {}, spinners = new Set();
 function makeServiceMesh(kind) {
   const d = SVC[kind], grp = new THREE.Group();
-  if (!svcGeoCache[kind]) { SVCGEN[kind](); svcGeoCache[kind] = finish(); }
+  if (!svcGeoCache[kind]) { if (MK && QSVC[kind]) QSVC[kind](rng(kind.length * 7919 + kind.charCodeAt(0))); else SVCGEN[kind](); svcGeoCache[kind] = finish(); }
   const m = new THREE.Mesh(svcGeoCache[kind], MATS); m.castShadow = m.receiveShadow = true; grp.add(m);
   if (kind === 'wind') {
     if (!svcGeoCache.rotor) { for (let k = 0; k < 3; k++) { const b = new THREE.BoxGeometry(.03, .48, .008); b.translate(0, .24, 0); b.rotateZ(k * 2.094); addPart(b, M.TRIM, 0xf7f7f5); } svcGeoCache.rotor = finish(); }
