@@ -103,6 +103,8 @@
   .fpost { padding:9px 0; border-bottom:1px solid var(--line); font-size:13.5px; line-height:1.45; }
   .fpost .h { color:var(--muted); font-size:12px; }
   #floats { position:fixed; inset:0; pointer-events:none; z-index:4; overflow:hidden; }
+  #qmark { position:fixed; transform:translate(-50%, -100%); padding:5px 10px; border-radius:6px; background:var(--acc); color:#0c1a22; font-weight:700; font-size:12.5px; pointer-events:none; z-index:4; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,.35); }
+  #qmark::after { content:""; position:absolute; left:50%; bottom:-6px; margin-left:-6px; border:6px solid transparent; border-bottom:0; border-top-color:var(--acc); }
   .float { position:absolute; transform:translate(-50%, -50%); font-weight:700; font-size:13px; color:#bff0b0; text-shadow:0 1px 3px rgba(0,0,0,.8); animation:floatUp 1.6s ease-out forwards; white-space:nowrap; }
   .float.money { color:#ffe08a; } .float.bad { color:#ffb0a8; }
   @keyframes floatUp { from { opacity:0; margin-top:0; } 15% { opacity:1; } to { opacity:0; margin-top:-46px; } }
@@ -182,6 +184,7 @@
 
 <div id="left"><div id="quest" class="panel hidden"></div><div id="warn" class="panel hidden"></div><div id="post" class="panel hidden"></div></div>
 <div id="floats"></div>
+<div id="qmark" class="hidden">Buradan başla</div>
 <div id="toast"></div>
 
 <div id="bottom">
@@ -418,8 +421,8 @@ controls.zoomToCursor = true;
 controls.listenToKeyEvents(window); controls.keyPanSpeed = 18;
 function resetView() {
   const portrait = innerWidth < innerHeight;
-  controls.target.set(wx(HWY_X + 6), 0, wx(EXIT_ZS[0] + 4));
-  camera.position.set(controls.target.x - 9, portrait ? 17 : 11, controls.target.z + (portrait ? 24 : 17));
+  controls.target.set(wx(HWY_X + 4), 0, wx(EXIT_ZS[0] + 1));
+  camera.position.set(controls.target.x + (portrait ? 6 : 8), portrait ? 15 : 11, controls.target.z + (portrait ? 20 : 15));
 }
 resetView();
 
@@ -1839,10 +1842,11 @@ function newGame(seed = (Math.random() * 1e9) | 0) {
   for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
     const i = idx(x, z); if (type[i] !== T_EMPTY) continue;
     const f = Math.sin(x * 0.21 + p3) * Math.sin(z * 0.17 + p4) + Math.sin((x + z) * 0.09 + p1) * 0.6;
-    if (f > 0.55 && hash(x, z, seed) < 0.85) tree[i] = 1;
+    if (f > 0.48 && hash(x, z, seed) < 0.85) tree[i] = 1;
+    else if (hash(x, z, seed + 5) < .045) tree[i] = 2;   // lone trees and small groups across the fields
   }
   ensureHighway();
-  money = 80000; month = 0; tax = 9; dayT = 0.12; questIdx = 0; hist = { pop: [], money: [], happy: [], flow: [] }; sandbox = false; undoStack.length = 0; syncUndo(); syncSandbox(); hudMilestone();
+  money = 80000; month = 3; tax = 9; dayT = 0.12; questIdx = 0; hist = { pop: [], money: [], happy: [], flow: [] }; sandbox = false; undoStack.length = 0; syncUndo(); syncSandbox(); hudMilestone();
   paintGround(); refresh();
   if (ready) showToast('🛣️ Şehrin otoyola bağlı olmalı: yolunu otoyol çıkışına (⤵) bağla, göçmenler oradan gelir.', { cls: 'info', ms: 7000 });
 }
@@ -1856,7 +1860,7 @@ function paintGround() {
   for (let y = 0; y < MASK; y++) for (let x = 0; x < MASK; x++) {
     const tx = (x / P) | 0, tz = (y / P) | 0, i = idx(tx, tz), j = (y * MASK + x) * 3;
     img[j] = type[i] === T_WATER ? 1 : nearType(tx, tz, T_WATER, 1) ? .85 : 0;
-    img[j + 1] = tree[i] ? 1 : 0;
+    img[j + 1] = tree[i] === 1 ? 1 : 0;
     img[j + 2] = .5 + .5 * Math.sin(x * .05 + Math.cos(y * .04) * 2) * Math.cos(y * .045 + x * .01) * .8 + (hash(x, y, 3) - .5) * .15;
   }
   for (let pass = 0; pass < 2; pass++) {
@@ -1927,6 +1931,7 @@ function ensureHighway() {
     type[i] = T_ROAD; roadKind[i] = x === HWY_X ? K_HWY : K_ROAD; zone[i] = 0; lvl[i] = 0; tree[i] = 0; rubble[i] = 0; busStops.delete(i);
   }
   for (let z = 0; z < N; z++) for (const x of [HWY_X - 1, HWY_X + 1]) { const i = idx(x, z); if (type[i] === T_EMPTY) { tree[i] = 0; zone[i] = 0; lvl[i] = 0; } }
+  for (const ez of EXIT_ZS) for (let dz = -2; dz <= 2; dz++) for (let dx = 1; dx <= 5; dx++) { const X = HWY_X + dx, Z = ez + dz; if (inb(X, Z)) tree[idx(X, Z)] = 0; }   // keep the exits clear
 }
 // ============================================================ Lots (CS2-style parcels)
 // Buildings grow on parcels of W×D tiles that front a connected street; deeper tiles are gardens, yards or parking.
@@ -2139,7 +2144,7 @@ function rebuild() {
       continue;
     }
     if (tree[i] && !lvl[i] && type[i] !== T_SVC && !rubble[i]) {
-      const n = 3 + (H(5) * 2 | 0);
+      const n = tree[i] === 2 ? 1 + (H(5) * 2 | 0) : 3 + (H(5) * 2 | 0);
       for (let k = 0; k < n; k++) { const r = H(20 + k), conifer = H(90 + k) < .35; plant(conifer ? treeB : treeA, X + (H(30 + k) - .5) * .8, Z + (H(40 + k) - .5) * .8, 1.1 + r * .8, r, r * 6); }
     }
     if (rubble[i]) { P(rubbleM, X, 0, Z, 1, 1, 1, H(8) * 6, 0xffffff); continue; }
@@ -2360,7 +2365,7 @@ function addXpSilent(n) { xp += n; while (msLevel + 1 < MILESTONES.length && xp 
 function busUpkeep() { return busLines.reduce((s, L) => s + (L.ok ? L.buses * 50 : 0), 0); }
 function policyUpkeep() { let u = 0; for (const k of policies) u += POLICIES[k].upkeep; return u; }
 const UPKEEP_K = [1, 1, 2, 0, .5, 1.5];
-function roadUpkeep() { let r = 0; for (let i = 0; i < NN; i++) if (type[i] === T_ROAD) r += UPKEEP_K[roadKind[i]] ?? 1; return Math.round(r); }
+function roadUpkeep() { let r = 0; for (let i = 0; i < NN; i++) if (type[i] === T_ROAD && !STUBS.has(i)) r += UPKEEP_K[roadKind[i]] ?? 1; return Math.round(r); }
 function tourismIncome() { let t = 0; for (const s of services.values()) t += SVC[s.kind].tourism || 0; return Math.round(t * (hasPolicy('tourism') ? 1.5 : 1) * Math.min(1, stats.pop / 500)); }
 let connWarned = 0;
 function simTick() {
@@ -2735,14 +2740,14 @@ function updateDay(dt) {
     sun.intensity = .3 + 2.6 * k;
   } else {
     sun.position.set(tgt.x - _sunDir.x * 100, 70, tgt.z + 45);
-    sun.color.setHex(0x9fb4ff); sun.intensity = .3;
+    sun.color.setHex(0x9fb4ff); sun.intensity = .55;   // moonlight
   }
   sun.target.position.copy(tgt);
-  hemi.intensity = .12 + .4 * k;
-  scene.environmentIntensity = .1 + .55 * k;
+  hemi.intensity = .26 + .26 * k;
+  scene.environmentIntensity = .2 + .45 * k;
   const dusk = Math.max(0, 1 - Math.abs(k - .45) * 2.2) * .6;
   scene.fog.color.copy(FOG_NIGHT).lerp(FOG_DAY, k).lerp(FOG_DUSK, dusk);
-  renderer.toneMappingExposure = .55 + .38 * k;
+  renderer.toneMappingExposure = .72 + .21 * k;
   const glow = (1 - k) * .9;
   for (const m of emissiveMats) m.emissiveIntensity = glow;
   glowMat.opacity = clamp((1 - k) * 1.5, 0, 1); glowMat.color.setRGB(1, .83, .6).multiplyScalar(1 + 2.5 * (1 - k)); glowMat.visible = k < .95;
@@ -3197,7 +3202,7 @@ function hud() {
   hudMilestone();
   $('taxv').textContent = '%' + tax;
   const w = [];
-  if (!services.size) w.push('Önce ⚡ Santral ve 💧 Su Kulesi kur.');
+  if (!services.size) { /* the goals panel guides the first steps */ }
   else {
     if (!net.pCap) w.push('⚡ Elektrik santrali yok.');
     if (!net.wCap) w.push('💧 Su kulesi yok.');
@@ -3319,12 +3324,25 @@ function frame() {
   const t = controls.target, cx = clamp(t.x, -HALF, HALF), cz = clamp(t.z, -HALF, HALF);
   if (cx !== t.x || cz !== t.z) { _d.set(cx - t.x, 0, cz - t.z); t.add(_d); camera.position.add(_d); }
   if (speed > 0) { acc += dt * SPEEDS[speed]; if (acc >= TICK) { acc -= TICK; simTick(); } }
-  updateVehicles(dt); drawVehicles(time); drawFires(time); updateGrowth(); updateDay(dt);
+  updateVehicles(dt); drawVehicles(time); drawFires(time); updateGrowth(); updateQuestMarker(); updateDay(dt);
   if (checkQuestsSoon) { checkQuestsSoon = false; checkQuests(); }
   if (overlay === 'traffic') { ovAcc += dt; if (ovAcc > .5) { ovAcc = 0; rebuild(); } }
   if (composer) composer.render(); else renderer.render(scene, camera);
 }
 
+// pulsing marker that shows where the current goal should be done (first goal: the highway exit)
+let qRing = null;
+function updateQuestMarker() {
+  const el = $('qmark');
+  const target = questIdx === 0 && !tool ? [HWY_X + 2, EXIT_ZS[0]] : null;
+  if (!qRing) { const g = new THREE.TorusGeometry(.5, .03, 8, 40); g.rotateX(Math.PI / 2); qRing = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x5ab4d6, toneMapped: false, transparent: true })); scene.add(qRing); }
+  qRing.visible = !!target; if (!target) { el.classList.add('hidden'); return; }
+  const X = wx(target[0]), Z = wx(target[1]), p = (time * .8) % 1;
+  qRing.position.set(X, .06, Z); qRing.scale.setScalar(.6 + p * .9); qRing.material.opacity = 1 - p;
+  _fv.set(X, .5, Z).project(camera);
+  if (_fv.z > 1 || Math.abs(_fv.x) > 1.05 || Math.abs(_fv.y) > 1.05) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden'); el.style.left = ((_fv.x + 1) / 2 * innerWidth) + 'px'; el.style.top = ((1 - _fv.y) / 2 * innerHeight - 6 - Math.abs(Math.sin(time * 3)) * 6) + 'px';
+}
 function updateGrowth() {
   let nc = 0;
   for (const lot of growing) {
