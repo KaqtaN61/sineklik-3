@@ -386,7 +386,7 @@ scene.add(sun, sun.target);
 let composer = null, bloom = null, gtao = null, tiltH = null, tiltV = null;
 function setupComposer() {
   composer?.dispose?.(); composer = null; bloom = gtao = null;
-  if (quality === 0) return;
+  if (quality < 2) return;   // phones render directly: no extra full-screen passes
   const pr = renderer.getPixelRatio();
   const rt = new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, { type: THREE.HalfFloatType, samples: 4 });
   composer = new EffectComposer(renderer, rt);
@@ -411,7 +411,8 @@ function sizeTilt() {
   tiltV.uniforms.v.value = 1.1 / innerHeight; tiltV.uniforms.r.value = 0.5;
 }
 function applyQuality() {
-  renderer.setPixelRatio(Math.min(devicePixelRatio, [1, 1.5, 2][quality]));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, [1, 1.25, 2][quality]));
+  if (treeA) treeA.castShadow = treeB.castShadow = quality === 2;   // foliage shadows are the most expensive part on phones
   sun.castShadow = quality > 0;
   const ms = quality === 2 ? 4096 : 2048;
   if (sun.shadow.mapSize.x !== ms) { sun.shadow.mapSize.set(ms, ms); sun.shadow.map?.dispose(); sun.shadow.map = null; }
@@ -1306,11 +1307,11 @@ function buildMeshes() {
   // trees: broadleaf and conifer
   cyl(.008, .016, .26, 0, 0, 0, M.TRIM, 0x4a3b2c, 6);
   for (const [a, l] of [[0, .09], [2.1, .08], [4.2, .085]]) { const g = new THREE.CylinderGeometry(.004, .007, l, 4); g.translate(0, l / 2, 0); g.rotateZ(.7); g.rotateY(a); g.translate(0, .2, 0); addPart(g, M.TRIM, 0x4a3b2c); }
-  foliage(0, .34, 0, .15, .13, .15, 34, .12, 0xd8e6c4, 11); foliage(.06, .43, .03, .09, .07, .09, 12, .1, 0xe6efd6, 12);
-  treeA = mkInst(finish(), MATS, NN * 3);
+  foliage(0, .34, 0, .15, .13, .15, 22, .14, 0xd8e6c4, 11); foliage(.06, .43, .03, .09, .07, .09, 8, .11, 0xe6efd6, 12);
+  treeA = mkInst(finish(), MATS, NN * 3, quality === 2);
   cyl(.006, .012, .5, 0, 0, 0, M.TRIM, 0x4a3b2c, 6);
-  for (let k = 0; k < 6; k++) { const y = .08 + k * .07, r = .15 * (1 - k / 6.5); foliage(0, y, 0, r, .035, r, 9, .085, 0x9fb38c, 20 + k); }
-  treeB = mkInst(finish(), MATS, NN * 3);
+  for (let k = 0; k < 5; k++) { const y = .08 + k * .085, r = .15 * (1 - k / 5.5); foliage(0, y, 0, r, .04, r, 7, .095, 0x9fb38c, 20 + k); }
+  treeB = mkInst(finish(), MATS, NN * 3, quality === 2);
   // vehicles: Kenney Car Kit (CC0), scaled so a sedan is about 4.5 m long
   const carMat = new THREE.MeshStandardMaterial({ map: CARTEX, roughness: .42, metalness: .25 });
   for (const name of [...CIV, ...TRUCKS, ...SPECIAL]) {
@@ -1359,7 +1360,7 @@ function buildMeshes() {
 const MASK = 256;
 const maskCanvas = canvas(MASK);
 const maskTex = new THREE.CanvasTexture(maskCanvas);
-const groundGeo = new THREE.PlaneGeometry(N, N, N * 4, N * 4).rotateX(-Math.PI / 2);   // 4 vertices per tile: smooth river banks
+const groundGeo = new THREE.PlaneGeometry(N, N, N * 2, N * 2).rotateX(-Math.PI / 2);   // 2 vertices per tile: smooth enough river banks, light on phones
 let ground, water, waterNormal;
 function buildTerrain() {
   const grassT = texFrom(IMG.grass.diff, true, N / 2.2), grassN = texFrom(IMG.grass.nor, false, N / 2.2);
@@ -2863,6 +2864,7 @@ applyQuality();
   renderer.setAnimationLoop(frame);
   window.__kent = {
     get stats() { return stats; }, get money() { return money; }, get month() { return month; }, get demand() { return demand; }, get net() { return net; },
+    info() { renderer.info.autoReset = false; renderer.info.reset(); if (composer) composer.render(); else renderer.render(scene, camera); const r = renderer.info.render; renderer.info.autoReset = true; let inst = 0, tris = 0; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) { inst += o.count; const g = o.geometry; tris += o.count * (g.index ? g.index.count : g.attributes.position.count) / 3; } }); return { calls: r.calls, tris: r.triangles, inst, instTris: Math.round(tris), q: quality, pr: renderer.getPixelRatio() }; },
     get lots() { const o = {}; for (const l of lots.values()) { const k = 'RCIO'[l.zone - 1] + l.lvl + ' ' + l.W + 'x' + l.D; o[k] = (o[k] || 0) + 1; } return o; },
     get vehicles() { return vehicles.length; }, get vk() { const o = {}; for (const v of vehicles) o[v.kind] = (o[v.kind] || 0) + 1; o.arrivals = arrivals.length; o.sig = sigList.length; return o; }, get burning() { return burning.size; },
     simTick, setTool, newGame, startFire: (x, z) => startFire(idx(x, z)), setOverlay, focusOn, setDay: v => { dayT = v; }, setDayNight: v => { dayNight = v; },
