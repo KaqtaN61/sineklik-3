@@ -156,7 +156,7 @@
   <div class="chip panel"><span class="ms">payments</span><b id="money">₺0</b><small id="flow"></small></div>
   <div class="chip panel"><span class="ms">groups</span><b id="pop">0</b></div>
   <div class="chip panel"><span class="ms">sentiment_satisfied</span><b id="happy">—</b></div>
-  <div class="chip panel"><span class="ms">calendar_month</span><b id="date"></b></div>
+  <div class="chip panel"><span class="ms" id="wIc">sunny</span><b id="date"></b></div>
   <div class="chip panel" id="rci" title="Talep: Konut / Ticari / Sanayi / Ofis">
     <div class="bar" style="color:var(--r)"><i id="dR"></i></div>
     <div class="bar" style="color:var(--c)"><i id="dC"></i></div>
@@ -2379,7 +2379,7 @@ function simTick() {
     const i = lot.anchor, L = lot.lvl, d = D[lot.zone], n = lot.tiles.length;
     if (L < 3 && (served[i] & 3) === 3 && d > .15 && pLeft > n && wLeft > n && Math.random() < d * .08 && canUpgrade(i, L)) { setLotLvl(lot, L + 1); pLeft -= n; wLeft -= n; if (lot.zone === Z_R) arrivals.push(i, i); }
     else if ((d < -.4 && Math.random() < .02) || (lot.zone === Z_R && happy[i] < 20 && Math.random() < .04)) setLotLvl(lot, L - 1);
-    if (lots.has(lot.id) && !burn[i] && stats.pop >= 150 && Math.random() < .0012 * n * (1 - .85 * cov.fire[i]) * (lot.zone === Z_I ? 2 : 1)) startFire(i);
+    if (lots.has(lot.id) && !burn[i] && stats.pop >= 150 && Math.random() < .0012 * n * (1 - .85 * cov.fire[i]) * (lot.zone === Z_I ? 2 : 1) * (weather >= 2 ? .35 : 1)) startFire(i);
   }
   for (let i = 0; i < NN; i++) { const L = lvl[i]; if (L) crime[i] = clamp(crime[i] + .03 * L * (1 - cov.police[i]) * Math.min(1, stats.pop / 1000) - .12 * cov.police[i], 0, 1); }
   for (const i of [...burning]) {
@@ -2387,6 +2387,7 @@ function simTick() {
     if (burn[i] > 4) { burning.delete(i); burn[i] = 0; const lot = lotAt(i); if (lot) dropLot(lot, 6); else { lvl[i] = 0; rubble[i] = 6; } showToast('🔥 Bir bina yanarak yıkıldı. İtfaiye kapsamasını artır.'); }
   }
   for (let i = 0; i < NN; i++) if (rubble[i]) rubble[i]--;
+  rollWeather();
   computeNetworks(); computeStats();
   checkBusLines();
   lastIncome = Math.round((stats.pop * 2.2 + stats.jC * 2 + stats.jI * (hasPolicy('industry') ? 1.95 : 1.7) + stats.jO * 2.6) * tax / 10) + tourismIncome();
@@ -2590,7 +2591,7 @@ function updateVehicles(dt) {
     if (v.spray != null) { v.spray -= gdt; if (v.spray <= 0) { extinguish(v.target); vehicles.splice(k, 1); } continue; }
     v.life -= gdt; if (v.life <= 0) { vehicles.splice(k, 1); continue; }
     if (v.wait > 0) { v.wait -= gdt; continue; }
-    const rk = roadKind[v.b], cong = (rk === K_AVE ? .2 : rk === K_HWY ? .12 : .45) * (hasPolicy('smart') ? .65 : 1) * (SEASON_OF[month % 12] === 0 ? 1.25 : 1);
+    const rk = roadKind[v.b], cong = (rk === K_AVE ? .2 : rk === K_HWY ? .12 : .45) * (hasPolicy('smart') ? .65 : 1) * (SEASON_OF[month % 12] === 0 ? 1.25 : 1) * (1 + .25 * WET);
     const len = v.a === v.b ? .5 : 1, slow = v.kind === 'firetruck' || v.kind === 'ped' ? 1 : 1 + cong * Math.max(0, cnt[v.b] - 1);
     const surf = v.kind === 'ped' ? 1 : rk === K_GRAVEL ? .55 : rk === K_HWY && v.kind !== 'hwy' ? 1.4 : 1;
     v.t += gdt * v.speed * surf / len / slow;
@@ -2668,6 +2669,15 @@ function drawFires(time) {
 
 // ============================================================ Day / night
 const _sunDir = new THREE.Vector3();
+let weather = 0, CLOUD = 0, WET = 0, flashT = 0, rainPts = null;
+const WEATHER_NAME = ['Açık', 'Bulutlu', 'Yağmurlu', 'Fırtına'], WEATHER_MS = ['sunny', 'cloud', 'rainy', 'thunderstorm'];
+function rollWeather() {
+  if (Math.random() > .35) return;
+  const season = SEASON_OF[month % 12], r = Math.random();
+  const prev = weather;
+  weather = season === 0 ? (r < .55 ? 0 : 1) : season === 2 ? (r < .6 ? 0 : r < .82 ? 1 : r < .94 ? 2 : 3) : (r < .4 ? 0 : r < .65 ? 1 : r < .9 ? 2 : 3);
+  if (weather === 3 && prev !== 3) showToast('Fırtına geliyor! Yağmur ve şimşek bekleniyor.', { cls: 'info', ms: 3000 });
+}
 let shadowBox = 30;
 function updateDay(dt) {
   if (dayNight) dayT = (dayT + dt * SPEEDS[speed] / DAY_LEN) % 1; else dayT = .19;
@@ -2699,6 +2709,23 @@ function updateDay(dt) {
   if (bloom) bloom.strength = .08 + .4 * (1 - k);
   if (waterNormal) { waterNormal.offset.x += dt * .012; waterNormal.offset.y += dt * .006; }
   if (clouds) { clouds.rotation.y += dt * .002; clouds.userData.mat.color.setScalar(.18 + .82 * k); }
+  // weather: cloud cover dims the sun and greys the fog, rain wets the roads, storms flash
+  CLOUD += ((weather === 0 ? 0 : weather === 1 ? .55 : .9) - CLOUD) * Math.min(1, dt * .3);
+  WET += ((weather >= 2 ? 1 : 0) - WET) * Math.min(1, dt * .25);
+  sun.intensity *= 1 - .7 * CLOUD; hemi.intensity += .12 * CLOUD * k;
+  scene.fog.color.lerp(_C.setHex(0x8b949c).multiplyScalar(.25 + .75 * k), CLOUD * .65);
+  scene.fog.near = 60 - 38 * WET; scene.fog.far = 170 - 85 * WET;
+  renderer.toneMappingExposure *= 1 - .12 * CLOUD;
+  sky.material.uniforms.turbidity.value = 4.5 + 9 * CLOUD; sky.material.uniforms.rayleigh.value = 1.4 + 1.6 * CLOUD;
+  if (clouds) clouds.userData.mat.color.multiplyScalar(1 - .45 * CLOUD);
+  for (const m of [roadM?.material, hwyM?.material, roundM?.material, curveMats?.[0]]) if (m) { m.roughness = .92 - .6 * WET; m.metalness = .25 * WET; }
+  if (flashT > 0) { flashT -= dt; hemi.intensity += 3 * Math.max(0, flashT) / .18; }
+  if (weather === 3 && Math.random() < dt * .12) { flashT = .18; const d = .4 + Math.random() * 2; setTimeout(() => { noise(2.6, .45, 110, 'lowpass'); noise(.9, .25, 380, 'lowpass', .05); }, d * 1000); }
+  if (rainPts) {
+    rainPts.visible = WET > .15;
+    if (rainPts.visible) { const a = rainPts.geometry.attributes.position; for (let j = 0; j < a.count; j += 2) { let y = a.getY(j) - dt * 16; if (y < 0) y += 18; a.setY(j, y); a.setY(j + 1, y + .45); } a.needsUpdate = true; rainPts.position.set(controls.target.x, 0, controls.target.z); rainPts.material.opacity = .32 * WET; }
+  }
+  if (AU.rain) AU.rain.gain.setTargetAtTime(AU.on ? .16 * WET : 0, AU.ctx.currentTime, .6);
   // seasons: snow cover fades in and out, flakes fall around the camera target in winter
   const winter = SEASON_OF[month % 12] === 0;
   SNOW.value += ((winter ? 1 : 0) - SNOW.value) * Math.min(1, dt * .25);
@@ -3124,7 +3151,8 @@ function hud() {
   $('pop').textContent = fmt(stats.pop);
   $('happy').textContent = stats.pop ? '%' + Math.round(stats.happy) : '—';
   $('happy').className = !stats.pop ? '' : stats.happy < 40 ? 'neg' : stats.happy > 65 ? 'pos' : '';
-  $('date').textContent = `${SEASON_ICON[SEASON_OF[month % 12]]} ${MONTHS[month % 12]} ${Math.floor(month / 12) + 1}`;
+  $('date').textContent = `${MONTHS[month % 12]} ${Math.floor(month / 12) + 1}`;
+  $('wIc').textContent = SEASON_OF[month % 12] === 0 && weather === 0 ? 'ac_unit' : WEATHER_MS[weather]; $('wIc').parentElement.title = WEATHER_NAME[weather];
   setBar($('dR'), demand.r); setBar($('dC'), demand.c); setBar($('dI'), demand.i); setBar($('dO'), demand.o);
   hudMilestone();
   $('taxv').textContent = '%' + tax;
@@ -3322,6 +3350,8 @@ function startAmbience() {   // soft city hum, passing cars and birds, louder wh
   const c = AU.ctx, src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
   const b = c.createBuffer(1, c.sampleRate * 3, c.sampleRate), d = b.getChannelData(0); let last = 0; for (let k = 0; k < d.length; k++) { last = (last + .02 * (Math.random() * 2 - 1)) / 1.02; d[k] = last * 3.5; }
   src.buffer = b; src.loop = true; f.type = 'lowpass'; f.frequency.value = 420; g.gain.value = 0; src.connect(f).connect(g).connect(AU.out); src.start(); AU.amb = g;
+  { const rs = c.createBufferSource(), rf = c.createBiquadFilter(), rg = c.createGain(), rb = c.createBuffer(1, c.sampleRate * 2, c.sampleRate), rd = rb.getChannelData(0); for (let k = 0; k < rd.length; k++) rd[k] = Math.random() * 2 - 1;
+    rs.buffer = rb; rs.loop = true; rf.type = 'highpass'; rf.frequency.value = 1400; rg.gain.value = 0; rs.connect(rf).connect(rg).connect(AU.out); rs.start(); AU.rain = rg; }
   setInterval(() => {
     if (!AU.on || !AU.ctx || !type) return;
     const dist = camera.position.distanceTo(controls.target), near = clamp(1.4 - dist / 30, .15, 1), busy = Math.min(1, (stats.pop + 50) / 1500);
@@ -3416,6 +3446,8 @@ function citizenChatter() {   // one message every few months, chosen from what 
   if (hasKind('park')) opts.push('Parkta piknik yaptık, çocuklar bayıldı.');
   if (stats.jI > stats.pop * .5) opts.push('Fabrika dumanından camı açamıyoruz.');
   if (season === 0) opts.push('Kar yağıyor, şehir bembeyaz oldu.', 'Yollar buz tuttu, dikkatli sürün.');
+  if (weather === 2) opts.push('Şemsiyesiz çıktım, sırılsıklam oldum.', 'Yağmurda trafik yine yavaşladı.');
+  if (weather === 3) opts.push('Fırtına çok sert, pencereler titriyor.', 'Şimşekler tüm şehri aydınlattı, korkutucu ama güzel.');
   if (season === 2) opts.push('Sıcaktan bunaldık, nehir kenarı tıklım tıklım.');
   if (season === 1) opts.push('Ağaçlar çiçek açmış, bahar geldi.');
   if (season === 3) opts.push('Yapraklar sararmış, sonbahar çok güzel.');
@@ -3439,6 +3471,9 @@ async function loadAssets() {
   { const n = 1500, pos = new Float32Array(n * 3); for (let k = 0; k < n; k++) { pos[k * 3] = (Math.random() - .5) * 40; pos[k * 3 + 1] = Math.random() * 18; pos[k * 3 + 2] = (Math.random() - .5) * 40; }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     snowPts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: .07, transparent: true, opacity: .85, depthWrite: false })); snowPts.visible = false; scene.add(snowPts); }
+  { const n = 1400, pos = new Float32Array(n * 6); for (let k = 0; k < n; k++) { const x = (Math.random() - .5) * 40, y = Math.random() * 18, z = (Math.random() - .5) * 40; pos.set([x, y, z, x + .03, y + .45, z + .02], k * 6); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    rainPts = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xb8c4d0, transparent: true, opacity: .3, depthWrite: false })); rainPts.visible = false; rainPts.frustumCulled = false; scene.add(rainPts); }
   updateDay(0); updateEnv();
 }
 
@@ -3460,6 +3495,7 @@ applyQuality();
     get stats() { return stats; }, get money() { return money; }, get month() { return month; }, get demand() { return demand; }, get net() { return net; },
     info() { renderer.info.autoReset = false; renderer.info.reset(); if (composer) composer.render(); else renderer.render(scene, camera); const r = renderer.info.render; renderer.info.autoReset = true; let inst = 0, tris = 0; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) { inst += o.count; const g = o.geometry; tris += o.count * (g.index ? g.index.count : g.attributes.position.count) / 3; } }); const top = []; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) { const g = o.geometry, t = (g.index ? g.index.count : g.attributes.position.count) / 3; top.push([Object.keys(LOTMESH).find(k => LOTMESH[k] === o) || (o === treeA ? 'treeA' : o === treeB ? 'treeB' : '?'), o.count, Math.round(t), Math.round(t * o.count)]); } }); top.sort((a, b) => b[3] - a[3]); return { calls: r.calls, tris: r.triangles, inst, instTris: Math.round(tris), q: quality, pr: renderer.getPixelRatio(), top: top.slice(0, 12) }; },
     dbgRound() { let n = 0; for (let i = 0; i < NN; i++) if (roadKind[i] === K_ROUND) n++; return n + " ring tiles, islands " + [...services.values()].filter(s => s.kind === "island").length + ", undo " + undoStack.length; },
+    setWeather(w) { weather = w; CLOUD = w ? (w === 1 ? .55 : .9) : 0; WET = w >= 2 ? 1 : 0; hud(); },
     finishBuilds() { for (const l of growing) { l.g0 = -1e9; } updateGrowth(); growing.clear(); for (const l of lots.values()) delete l.g0; rebuild(); },
     get lots() { const o = {}; for (const l of lots.values()) { const k = 'RCIO'[l.zone - 1] + l.lvl + ' ' + l.W + 'x' + l.D; o[k] = (o[k] || 0) + 1; } return o; },
     get vehicles() { return vehicles.length; }, get vk() { const o = {}; for (const v of vehicles) o[v.kind] = (o[v.kind] || 0) + 1; o.arrivals = arrivals.length; o.sig = sigList.length; return o; }, get burning() { return burning.size; },
