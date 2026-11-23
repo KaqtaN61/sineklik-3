@@ -103,6 +103,9 @@
   .fpost { padding:9px 0; border-bottom:1px solid var(--line); font-size:13.5px; line-height:1.45; }
   .fpost .h { color:var(--muted); font-size:12px; }
   #floats { position:fixed; inset:0; pointer-events:none; z-index:4; overflow:hidden; }
+  #camExit { position:fixed; right:calc(8px + var(--sr)); top:calc(8px + var(--st)); z-index:12; display:flex; align-items:center; gap:6px; padding:5px 5px 5px 12px; font-size:13px; }
+  #camExit button { width:38px; height:34px; display:flex; align-items:center; justify-content:center; }
+  body.cinema #hud, body.cinema #left, body.cinema #bottom, body.cinema #cam, body.cinema #toast, body.cinema #floats, body.cinema #qmark { display:none !important; }
   #qmark { position:fixed; transform:translate(-50%, -100%); padding:5px 10px; border-radius:6px; background:var(--acc); color:#0c1a22; font-weight:700; font-size:12.5px; pointer-events:none; z-index:4; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,.35); }
   #qmark::after { content:""; position:absolute; left:50%; bottom:-6px; margin-left:-6px; border:6px solid transparent; border-bottom:0; border-top-color:var(--acc); }
   .float { position:absolute; transform:translate(-50%, -50%); font-weight:700; font-size:13px; color:#bff0b0; text-shadow:0 1px 3px rgba(0,0,0,.8); animation:floatUp 1.6s ease-out forwards; white-space:nowrap; }
@@ -184,6 +187,7 @@
 
 <div id="left"><div id="quest" class="panel hidden"></div><div id="warn" class="panel hidden"></div><div id="post" class="panel hidden"></div></div>
 <div id="floats"></div>
+<div id="camExit" class="panel hidden"><span id="camLbl"></span><button id="camNext" class="hidden"><span class="ms">skip_next</span></button><button id="camOff"><span class="ms">close</span></button></div>
 <div id="qmark" class="hidden">Buradan başla</div>
 <div id="toast"></div>
 
@@ -247,6 +251,7 @@
     <div class="row"><b>Ses</b><button id="sndBtn">Açık</button></div>
     <div class="row"><b>Sınırsız para</b><button id="sbBtn">Kapalı</button><span class="muted">Serbest mod: bütçe derdi olmadan inşa et.</span></div>
     <div class="row"><button id="save">💾 Kaydet</button><button id="load">📂 Yükle</button><button id="new">🆕 Yeni şehir</button></div>
+    <div class="row"><button id="followBtn">Araç kamerası</button><button id="photoBtn">Fotoğraf modu</button></div>
     <div class="row"><button id="fs">⛶ Tam ekran</button><button id="help">❔ Nasıl oynanır</button></div>
     <p class="muted">Binalar: Quaternius Downtown City MegaKit (quaternius.com, CC0) · Dokular: Poly Haven (polyhaven.com, CC0) · Araçlar: Kenney Car Kit (kenney.nl, CC0) · İkonlar: Material Symbols (Google, Apache 2.0)</p>
     <button class="big" id="menuClose">Kapat</button>
@@ -1674,9 +1679,18 @@ function buildMeshes() {
     VM[name] = mkInst(g, carMat, SPECIAL.includes(name) ? 40 : 200);
     if ((CIV.includes(name) || TRUCKS.includes(name)) && !PM[name]) PM[name] = mkInst(g, carMat, 1200);
   }
-  box(.12, .1, .44, 0, .03, 0, M.PAINT, 0xffffff); box(.124, .045, .4, 0, .075, -.01, M.DARK, 0x1b232c); box(.118, .045, .006, 0, .06, .221, M.DARK, 0x1b232c);
-  box(.11, .01, .4, 0, .13, 0, M.TRIM, 0xe8e8e8); box(.07, .02, .1, 0, .14, -.08, M.TRIM, 0xcfd3d6);
-  for (const x of [-.058, .058]) for (const z of [-.14, .14]) { const g = new THREE.CylinderGeometry(.024, .024, .016, 10); g.rotateZ(Math.PI / 2); g.translate(x, .024, z); addPart(g, M.PAINT, 0x16181a); }
+  { // city bus, 12 m: body in the line colour, dark window band, windscreen, doors, destination sign, wheels
+    const S = MU * 1.05, L = 12, W = 2.5, ext = (pts, w, mat, col) => { const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))); const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: true, bevelThickness: .05, bevelSize: .05, bevelSegments: 1, curveSegments: 1 }); g.translate(0, 0, -w / 2); g.rotateY(-Math.PI / 2); g.scale(S, S, S); addPart(g, mat, col); };
+    ext([[-6, .35], [6, .35], [6.05, 2.6], [5.85, 3.05], [-6, 3.05]], W - .1, M.PAINT, 0xffffff);
+    ext([[-5.6, 1.55], [5.95, 1.55], [6.07, 2.55], [5.9, 2.75], [-5.6, 2.75]], W - .04, M.DARK, 0x1a2129);
+    box(2.3 * S, .12 * S, .4 * S, 0, 3.05 * S, 0, M.TRIM, 0xd8dadc); box(1.4 * S, .3 * S, .05 * S, 0, 2.62 * S, (L / 2 + .07) * S, M.TRIM, 0xffb21e);
+    for (const z of [4.2, -.6]) box(.05 * S, 2.3 * S, 1.1 * S, (W / 2 + .02) * S, .4 * S, z * S, M.DARK, 0x2a3038);
+    for (const fz of [L / 2 - 2.2, -L / 2 + 2.6]) for (const sx of [-1, 1]) { const g = new THREE.CylinderGeometry(.5, .5, .3, 10); g.rotateZ(Math.PI / 2); g.translate(sx * (W / 2 - .12), .5, fz); g.scale(S, S, S); addPart(g, M.DARK, 0x101112); }
+    for (const sx of [-1, 1]) box(.35 * S, .15 * S, .06 * S, sx * .85 * S, .75 * S, (L / 2 + .05) * S, M.TRIM, 0xfff6d8);
+    box((W - .5) * S, 1.0 * S, .06 * S, 0, 1.75 * S, (-L / 2 - .06) * S, M.DARK, 0x1a2129); box((W - .2) * S, .3 * S, .1 * S, 0, .35 * S, (-L / 2 - .05) * S, M.DARK, 0x22262a);
+    for (const sx of [-1, 1]) box(.22 * S, .5 * S, .06 * S, sx * (W / 2 - .25) * S, .9 * S, (-L / 2 - .08) * S, M.PAINT, 0x9a1010);
+    box(1.0 * S, .25 * S, .06 * S, 0, 2.75 * S, (-L / 2 - .07) * S, M.TRIM, 0xffb21e);
+  }
   VM.bus = mkInst(finish(), MATS, 80);
   // light parked car for phones (the detailed models are ~2k triangles each)
   box(.118, .036, .27, 0, .012, 0, M.PAINT, 0xffffff); box(.104, .036, .15, 0, .048, -.012, M.DARK, 0x1c232b); box(.1, .006, .13, 0, .084, -.012, M.PAINT, 0xffffff);
@@ -2675,6 +2689,7 @@ function drawVehicles(time) {
       x = u * u * P0[0] + 2 * u * t * P1[0] + t * t * P2[0]; z = u * u * P0[1] + 2 * u * t * P1[1] + t * t * P2[1];
       rot = Math.atan2(2 * u * (P1[0] - P0[0]) + 2 * t * (P2[0] - P1[0]), 2 * u * (P1[1] - P0[1]) + 2 * t * (P2[1] - P1[1]));
     }
+    v.px = x; v.pz = z; v.prot = rot;
     if (v.kind === 'ped') { put(pedM, np++, x, .034 + Math.abs(Math.sin(time * 9 + v.b)) * .004, z, 1, 1, 1, rot, v.color); continue; }
     const n = vc[v.model] = (vc[v.model] || 0) + 1;
     put(VM[v.model], n - 1, x, .02, z, 1, 1, 1, rot, SPECIAL.includes(v.model) ? 0xffffff : v.color);
@@ -3330,8 +3345,8 @@ let acc = 0, ovAcc = 0, time = 0;
 const clock = new THREE.Clock(), _d = new THREE.Vector3();
 function frame() {
   const dt = Math.min(clock.getDelta(), .1); time += dt;
-  updateCamAnim(dt);
-  controls.update();
+  updateCamAnim(dt); updateFollow(dt);
+  if (camMode !== "follow") controls.update();
   const t = controls.target, cx = clamp(t.x, -HALF, HALF), cz = clamp(t.z, -HALF, HALF);
   if (cx !== t.x || cz !== t.z) { _d.set(cx - t.x, 0, cz - t.z); t.add(_d); camera.position.add(_d); }
   if (speed > 0) { acc += dt * SPEEDS[speed]; if (acc >= TICK) { acc -= TICK; simTick(); } }
@@ -3341,6 +3356,31 @@ function frame() {
   if (composer) composer.render(); else renderer.render(scene, camera);
 }
 
+// ---- cinema: follow a car at street level, or hide the interface for photos
+let followV = null, camMode = null, followSnap = false;
+const _fp = new THREE.Vector3(), _ft = new THREE.Vector3();
+function pickFollow() {
+  const pool = vehicles.filter(v => (v.kind === 'car' || v.kind === 'commute' || v.kind === 'mover' || v.kind === 'bus' || v.kind === 'hwy') && v.px != null);
+  followV = pool.length ? pool[(Math.random() * pool.length) | 0] : null; followSnap = true;
+  $('camLbl').textContent = followV ? ({ bus: 'Otobüs', mover: 'Taşınma kamyoneti', hwy: 'Otoyolda bir araç', commute: 'İşe giden araç' }[followV.kind] || 'Bir sürücü') + ' takip ediliyor' : 'Takip edilecek araç yok';
+}
+function setCamMode(m) {
+  camMode = m; document.body.classList.toggle('cinema', !!m); $('camExit').classList.toggle('hidden', !m); $('camNext').classList.toggle('hidden', m !== 'follow');
+  controls.enabled = m !== 'follow';
+  if (m === 'follow') { pickFollow(); camera.fov = 55; } else { followV = null; camera.fov = 40; if (m === 'photo') $('camLbl').textContent = 'Fotoğraf modu'; }
+  camera.updateProjectionMatrix(); $('menu').classList.add('hidden');
+}
+function updateFollow(dt) {
+  if (camMode !== 'follow') return;
+  if (!followV || !vehicles.includes(followV) || followV.px == null) { pickFollow(); if (!followV) return; }
+  const dx = Math.sin(followV.prot), dz = Math.cos(followV.prot);
+  _ft.set(followV.px + dx * .6, .08, followV.pz + dz * .6); _fp.set(followV.px - dx * .75, .34, followV.pz - dz * .75);
+  const k = followSnap ? 1 : 1 - Math.exp(-dt * 4); followSnap = false; controls.target.lerp(_ft, k); camera.position.lerp(_fp, k); camera.lookAt(controls.target);
+}
+$('followBtn').onclick = () => setCamMode('follow');
+$('photoBtn').onclick = () => setCamMode('photo');
+$('camOff').onclick = () => { setCamMode(null); resetView(); };
+$('camNext').onclick = () => pickFollow();
 // pulsing marker that shows where the current goal should be done (first goal: the highway exit)
 let qRing = null;
 function updateQuestMarker() {
@@ -3566,6 +3606,7 @@ applyQuality();
     dbgRound() { let n = 0; for (let i = 0; i < NN; i++) if (roadKind[i] === K_ROUND) n++; return n + " ring tiles, islands " + [...services.values()].filter(s => s.kind === "island").length + ", undo " + undoStack.length; },
     setWeather(w) { weather = w; CLOUD = w ? (w === 1 ? .55 : .9) : 0; WET = w >= 2 ? 1 : 0; hud(); },
     fireSome() { const l = [...lots.values()].find(l => l.lvl >= 2) || [...lots.values()][0]; startFire(l.anchor); const x = l.anchor % N, z = (l.anchor / N) | 0; this.lookAt(x, z, 5, 4); return [x, z]; },
+    cam(m) { setCamMode(m); },
     finishBuilds() { for (const l of growing) { l.g0 = -1e9; } updateGrowth(); growing.clear(); for (const l of lots.values()) delete l.g0; rebuild(); },
     get lots() { const o = {}; for (const l of lots.values()) { const k = 'RCIO'[l.zone - 1] + l.lvl + ' ' + l.W + 'x' + l.D; o[k] = (o[k] || 0) + 1; } return o; },
     get vehicles() { return vehicles.length; }, get vk() { const o = {}; for (const v of vehicles) o[v.kind] = (o[v.kind] || 0) + 1; o.arrivals = arrivals.length; o.sig = sigList.length; return o; }, get burning() { return burning.size; },
