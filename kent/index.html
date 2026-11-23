@@ -876,6 +876,136 @@ GEN.O3 = r => {
 };
 const VARIANTS = { R1: 10, R2: 12, R3: 10, C1: 6, C2: 5, C3: 5, I1: 5, I2: 4, I3: 4, O1: 4, O2: 4, O3: 4 };
 
+// ============================================================ Parcel (lot) buildings
+// A lot is W tiles of street frontage × D tiles deep. Local frame: x along the street, front edge at z = +D/2.
+function at(ox, oz, fn) {   // run a 1×1 generator shifted to another tile of the lot
+  const k0 = PARTS.length, p0 = PARK.length; fn();
+  for (let k = k0; k < PARTS.length; k++) PARTS[k][0].translate(ox, 0, oz);
+  for (let k = p0; k < PARK.length; k++) { PARK[k][0] += ox; PARK[k][1] += oz; }
+}
+const lotGround = (W, D, mat = M.PAVE, col = 0xffffff, z = 0, d = D) => box(W - .02, .02, d - .02, 0, 0, z, mat, col);
+function fence(W, D, col = 0x8d9296, gapFront = true) {
+  box(.01, .05, D - .04, -W / 2 + .02, .02, 0, M.TRIM, col); box(.01, .05, D - .04, W / 2 - .02, .02, 0, M.TRIM, col); box(W - .04, .05, .01, 0, .02, -D / 2 + .02, M.TRIM, col);
+  if (!gapFront) box(W - .04, .05, .01, 0, .02, D / 2 - .02, M.TRIM, col);
+}
+function parking(x0, x1, z0, z1) {   // asphalt lot with rows of stalls facing an aisle
+  box(x1 - x0, .004, z1 - z0, (x0 + x1) / 2, .021, (z0 + z1) / 2, M.TRIM, 0x45484d);
+  const rows = Math.max(1, Math.floor((z1 - z0) / .5));
+  for (let k = 0; k < rows; k++) { const zc = z0 + (k + .5) * (z1 - z0) / rows; stalls(x0 + .08, x1 - .08, zc - .12, Math.PI); if (z1 - z0 > .8) stalls(x0 + .08, x1 - .08, zc + .12, 0); }
+}
+function yard(r) {   // back garden of a house
+  lot(M.LAWN);
+  const k = r();
+  if (k < .35) { box(.34, .014, .2, (r() - .5) * .3, .02, (r() - .5) * .3, M.TRIM, 0xf2f2ee); box(.3, .016, .16, (r() - .5) * .3 * 0, .02, 0, M.DARK, 0x3fb8d8); }
+  else if (k < .65) for (let j = 0; j < 4; j++) box(.5, .02, .05, -.05, .02, -.3 + j * .13, M.LEAF, 0x5a6b34);   // vegetable beds
+  else { box(.16, .1, .12, .3, .02, -.3, M.TRIM, pick(r, [0xb7a68b, 0x8aa0b2, 0xd9d2c4])); gable(.18, .05, .14, .3, .12, -.3, M.RGREY, 0x6c727c, true); }
+  for (let j = 0; j < 2; j++) if (r() < .7) { const x = (r() - .5) * .7, z = (r() - .5) * .7; cyl(.012, .016, .12, x, .02, z, M.TRIM, 0x5a4632, 6); blob(.09 + r() * .04, x, .2, z, 0x4f8a3a, j * 13 + 5); }
+  box(.01, .04, .96, -.48, .02, 0, M.TRIM, 0xb89a78); box(.96, .04, .01, 0, .02, -.48, M.TRIM, 0xb89a78);
+}
+function backLot(r, kind) {
+  if (kind === 'park') { lot(M.PAVE); parking(-.46, .46, -.45, .45); blob(.06, -.4, .13, -.4, 0x4f8a3a, 2); return; }
+  if (kind === 'store') { box(.98, .02, .98, 0, 0, 0, M.RGRAVEL, 0x8a857c); for (let j = 0; j < 4; j++) box(.3, .12, .12, -.25 + (j % 2) * .45, .02 + (j > 1 ? .12 : 0), -.2 + (j % 2) * .1, M.PAINT, pick(r, [0x2f6e9a, 0xa6402f, 0x3f7a45, 0xc9a13b, 0x8a8f94])); fence(1, 1); return; }
+  lot(M.PAVE); box(.6, .02, .6, 0, .02, 0, M.LAWN); for (const [x, z] of [[-.3, -.3], [.3, .3]]) { cyl(.012, .016, .12, x, .02, z, M.TRIM, 0x5a4632, 6); blob(.1, x, .21, z, 0x4b8a36, Math.round(x * 40 + z * 9)); }
+  for (const x of [-.15, .15]) box(.1, .02, .03, x, .035, .35, M.TRIM, 0x6d4c33);
+}
+// row of shops/flats along the street front, depth bd, floors fl
+function frontBlock(W, D, bd, fl, wall, tint, shops) {
+  const w = W - .14, z = D / 2 - .1 - bd / 2;
+  if (shops) { fbox(w, FH + .03, bd, 0, .02, z, M.SHOP, 0xffffff, 1); if (fl > 1) fbox(w, FH * (fl - 1), bd, 0, .05 + FH, z, wall, tint); }
+  else fbox(w, FH * fl + .03, bd, 0, .02, z, wall, tint);
+  const top = .05 + FH * fl;
+  box(w + .025, .03, bd + .025, 0, top - .005, z, M.TRIM, 0xdcd8d0); box(w - .04, .006, bd - .04, 0, top + .025, z, M.RGRAVEL, 0x9c9a95);
+  return { w, z, top };
+}
+const LOTGEN = {
+  R(r, W, D, L) {
+    const fz = (D - 1) / 2;
+    if (L === 1 || W === 1) {   // houses (or a single block) per frontage tile, gardens / parking behind
+      for (let a = 0; a < W; a++) {
+        const x = a - (W - 1) / 2;
+        at(x, fz, () => GEN['R' + L](r));
+        for (let b = 1; b < D; b++) at(x, fz - b, () => L === 1 ? yard(r) : backLot(r, b === 1 && r() < .6 ? 'park' : 'court'));
+      }
+      return;
+    }
+    lotGround(W, D, M.PAVE);
+    const wall = pick(r, L === 3 ? [M.GLASS, M.STONE, M.PLASTER, M.GREY] : [M.BRICK, M.PLASTER, M.BEIGE, M.GREY, M.STONE]), tint = wall === M.GLASS ? pick(r, [0xffffff, 0xdde9f2]) : wallTint(r, wall);
+    if (L === 2) {   // perimeter block with a green courtyard
+      const fl = 4 + Math.floor(r() * 4), b = frontBlock(W, D, .42, fl, wall, tint, r() < .4);
+      for (let k = 1; k < fl; k++) for (let a = 0; a < W * 3; a++) { const x = -b.w / 2 + (a + .5) * b.w / (W * 3); box(.16, .012, .06, x, .05 + FH * k, b.z + .24, M.TRIM, 0xe7e4dd); box(.16, .03, .004, x, .062 + FH * k, b.z + .27, M.TRIM, 0x3a3e43); }
+      if (D >= 2) { const wd = D - .66; for (const s of [-1, 1]) fbox(.36, FH * fl, wd, s * (W / 2 - .25), .02, b.z - .21 - wd / 2 + .02, wall, tint); box(W - 1, .02, D - .8, 0, .02, -.25, M.LAWN); }
+      if (r() < .6) gable(b.w + .04, .22, .46, 0, b.top + .02, b.z, pick(r, [M.RCLAY, M.RGREY]), pick(r, [0xffffff, 0xd99a82, 0x9fb4c9]), true);
+      for (let a = 0; a < W; a++) box(.12, .014, .08, a - (W - 1) / 2, .02 + FH * .85, D / 2 - .06, M.TRIM, 0x50555b);
+      blob(.11, 0, .25, -D / 2 + .5, 0x4f8a3a, 3);
+    } else {   // podium with towers, garage behind
+      const pd = Math.min(D - .2, .9), pz = D / 2 - .1 - pd / 2;
+      fbox(W - .14, FH + .03, pd, 0, .02, pz, M.SHOP, 0xffffff, 1); box(W - .1, .03, pd + .03, 0, .05 + FH, pz, M.TRIM, 0xcfccc5);
+      const n = W >= 2 && r() < .6 ? 2 : 1;
+      for (let k = 0; k < n; k++) {
+        const tw = n === 2 ? .62 : .8, x = n === 2 ? (k ? .5 : -.5) * (W - .8) : 0, fl = 14 + Math.floor(r() * 14);
+        fbox(tw, FH * fl, Math.min(.7, pd - .1), x, .08 + FH, pz, wall, tint); const top = .08 + FH * (fl + 1);
+        box(tw + .02, .04, Math.min(.72, pd - .08), x, top, pz, M.TRIM, 0xd8d5ce); box(.24, .14, .2, x, top + .04, pz, M.TRIM, 0xb9b6b0);
+      }
+      if (D >= 2) { const gz = -D / 2 + .1 + (D - pd - .3) / 2, gd = D - pd - .3; fbox(W - .2, FH * 2, gd, 0, .02, gz, M.GREY, 0xc9c6bf, 2); box(W - .18, .02, gd + .02, 0, .02 + FH * 2, gz, M.RGRAVEL, 0x8c8a85); }
+    }
+  },
+  C(r, W, D, L) {
+    const fz = (D - 1) / 2;
+    if (W === 1) { at(0, fz, () => GEN['C' + L](r)); for (let b = 1; b < D; b++) at(0, fz - b, () => backLot(r, 'park')); return; }
+    lotGround(W, D, M.PAVE);
+    const sign = pick(r, [0xe0453a, 0x2f7de1, 0xf2b632, 0x3fae6a, 0xd94f9c, 0x7a4fd9]);
+    if (L === 1) {   // strip mall: shops at the back, parking in front
+      const bd = Math.min(.5, D * .45), z = -D / 2 + .08 + bd / 2;
+      fbox(W - .14, FH + .06, bd, 0, .02, z, M.SHOP, 0xffffff, 1); box(W - .1, .03, bd + .03, 0, .08 + FH, z, M.TRIM, 0xe2dfd8);
+      box(W - .14, .012, .12, 0, .02 + FH * .9, z + bd / 2 + .06, M.PAINT, pick(r, [0xb33a3a, 0x2f6e4f, 0x274f8a, 0xd9a43b]));
+      for (let a = 0; a < W * 2; a++) box(.3, .05, .012, -W / 2 + .3 + a * (W - .3) / (W * 2 - 1 || 1) * .98, .02 + FH + .02, z + bd / 2 + .007, M.PAINT, pick(r, [0xffffff, 0xf2d06b, sign]));
+      parking(-W / 2 + .1, W / 2 - .1, z + bd / 2 + .15, D / 2 - .05);
+      billboard(W / 2 - .2, .02, D / 2 - .1, .3, sign);
+    } else if (L === 2) {   // mixed use: shops below, flats above
+      const fl = 4 + Math.floor(r() * 4), wl = pick(r, WALLS_RES), b = frontBlock(W, D, Math.min(.6, D - .3), fl, wl, wallTint(r, wl), true);
+      box(b.w * .9, .012, .11, 0, .02 + FH * .86, D / 2 - .05, M.PAINT, pick(r, [0xb33a3a, 0x2f6e4f, 0x274f8a, 0xd9a43b, 0x6b3d78]));
+      if (D >= 2) parking(-W / 2 + .1, W / 2 - .1, -D / 2 + .08, b.z - .35);
+      for (let k = 0; k < 4; k++) ac((r() - .5) * b.w * .8, b.top + .03, b.z);
+    } else {   // mall with a glass atrium and a tower
+      const md = Math.min(D - .2, 1.3), mz = D / 2 - .1 - md / 2;
+      fbox(W - .14, FH * 2.2, md, 0, .02, mz, M.STONE, 0xf1eee8); box(W - .1, .04, md + .03, 0, .02 + FH * 2.2, mz, M.TRIM, 0xd5d2cb);
+      cyl(.22, .22, FH * 2.6, 0, .02, D / 2 - .14, M.GLASS, 0xdde9f2, 20); box(.6, .1, .014, 0, .02 + FH * 1.7, D / 2 - .09, M.PAINT, sign);
+      const fl = 16 + Math.floor(r() * 12); fbox(.7, FH * fl, .6, (W - 1) / 2 * .6, .06 + FH * 2.2, mz - .1, M.GLASS, pick(r, [0xffffff, 0xd8ecf6]));
+      if (D >= 2) parking(-W / 2 + .1, W / 2 - .1, -D / 2 + .08, mz - md / 2 - .05);
+    }
+  },
+  I(r, W, D, L) {
+    if (W === 1 && D === 1) return GEN['I' + L](r);
+    box(W - .02, .02, D - .02, 0, 0, 0, M.RGRAVEL, 0x8a857c); fence(W, D);
+    const hw = W - .3, hd = Math.max(.5, D * .55), hz = -D / 2 + .15 + hd / 2, wall = pick(r, [M.IND, M.IND, M.INDBRICK]), h = L === 1 ? .32 : L === 2 ? .42 : .55;
+    fbox(hw, h, hd, 0, .02, hz, wall, pick(r, [0xffffff, 0xe6ecf2, 0xf2ece0, 0xdfe6dc]), 1);
+    if (L === 2) for (let k = 0; k < Math.round(hw / .3); k++) { const g = new THREE.BoxGeometry(.3, .01, hd); g.rotateZ(-.5); g.translate(-hw / 2 + .15 + k * .3, .02 + h + .07, hz); addPart(g, M.RMETAL, 0xaeb4ba); box(.01, .14, hd, -hw / 2 + .3 + k * .3, .02 + h, hz, M.DARK, 0x7d93a6); }
+    else box(hw + .02, .02, hd + .02, 0, .02 + h, hz, M.RMETAL, 0xaeb4ba);
+    for (let k = 0; k < Math.max(2, Math.round(hw / .25)); k++) box(.16, .16, .012, -hw / 2 + .15 + k * .25, .02, hz + hd / 2 + .006, M.PAINT, 0x8b9096);   // loading docks
+    const yz = hz + hd / 2, yd = D / 2 - yz;
+    if (yd > .35) { box(hw, .004, yd - .1, 0, .021, yz + yd / 2, M.TRIM, 0x45484d); for (let k = 0; k < Math.max(1, Math.round(hw / .3)); k++) PARK.push([-hw / 2 + .2 + k * .3, yz + .25, Math.PI / 2]); }
+    if (L >= 2) { cyl(.05, .07, 1.2 + r() * .6, hw / 2 - .1, .02, hz - hd / 2 + .1, M.TRIM, 0xc9c6bf); cyl(.053, .053, .08, hw / 2 - .1, 1.0, hz - hd / 2 + .1, M.PAINT, 0xb73a2e); }
+    if (L === 3) {
+      for (let k = 0; k < 3; k++) cyl(.12, .12, .7, -hw / 2 + .2 + k * .27, .02, -D / 2 + .2, M.TRIM, 0xd9dadc, 16);
+      cyl(.04, .06, 1.6, -hw / 2 + .15, .02, hz, M.TRIM, 0xc9c6bf); box(hw * .8, .03, .03, 0, .5, -D / 2 + .32, M.TRIM, 0x9aa0a6);
+    }
+    for (let k = 0; k < 3; k++) box(.24, .1, .1, W / 2 - .3, .02 + k * .1, D / 2 - .25 - (k % 2) * .12, M.PAINT, pick(r, [0x2f6e9a, 0xa6402f, 0x3f7a45, 0xc9a13b]));
+  },
+  O(r, W, D, L) {
+    const fz = (D - 1) / 2;
+    if (W === 1) { at(0, fz, () => GEN['O' + L](r)); for (let b = 1; b < D; b++) at(0, fz - b, () => backLot(r, b === 1 ? 'court' : 'park')); return; }
+    lotGround(W, D, M.PAVE);
+    const fl = L === 1 ? 3 + Math.floor(r() * 3) : L === 2 ? 8 + Math.floor(r() * 6) : 20 + Math.floor(r() * 12);
+    const bw = L === 3 ? .9 : W - .4, bd = Math.min(L === 3 ? .9 : .7, D - .5), bz = D / 2 - .35 - bd / 2;
+    fbox(bw + .1, FH * 2, bd + .1, 0, .02, bz, M.STONE, 0xf1eee8);
+    fbox(bw, FH * (fl - 2), bd, 0, .02 + FH * 2, bz, pick(r, [M.GLASS, M.GLASS, M.STONE]), pick(r, [0xcfe3f2, 0xd6efe8, 0xffffff, 0xe9e2f5]));
+    const top = .02 + FH * fl; box(bw - .02, .05, bd - .02, 0, top, bz, M.TRIM, 0xc8ccd0); box(.3, .12, .25, 0, top + .05, bz, M.TRIM, 0xb5b9be);
+    if (L === 3) cyl(.007, .012, 1, 0, top + .17, bz, M.TRIM, 0xe8e8e8, 6);
+    box(W - .2, .006, .3, 0, .021, D / 2 - .17, M.PAVE); cyl(.12, .13, .04, -W / 2 + .4, .02, D / 2 - .17, M.TRIM, 0xcfccc5, 18); cyl(.1, .1, .045, -W / 2 + .4, .02, D / 2 - .17, M.DARK, 0x4f87a8, 18);
+    for (const x of [W / 2 - .3, W / 2 - .7]) blob(.08, x, .18, D / 2 - .17, 0x4f8a3a, Math.round(x * 10));
+    if (D >= 2) parking(-W / 2 + .1, W / 2 - .1, -D / 2 + .08, bz - bd / 2 - .1);
+  },
+};
 const SVCGEN = {
   policepost() {
     lot(M.PAVE);
@@ -1333,6 +1463,7 @@ function alloc() {
   curveId = new Int16Array(NN); curveT = new Float32Array(NN); nextCurve = 1;
   for (const s of services.values()) scene.remove(s.mesh);
   services.clear(); vehicles.length = 0; burning.clear(); spinners.clear();
+  lotId = new Int32Array(NN); lots.clear(); nextLot = 1; arrivals.length = 0;
   roadKind = new Uint8Array(NN); busStops.clear(); busLines.length = 0; nextLine = 1; policies.clear(); xp = 0; msLevel = 0;
 }
 function newGame(seed = (Math.random() * 1e9) | 0) {
@@ -1434,6 +1565,47 @@ function ensureHighway() {
   }
   for (let z = 0; z < N; z++) for (const x of [HWY_X - 1, HWY_X + 1]) { const i = idx(x, z); if (type[i] === T_EMPTY) { tree[i] = 0; zone[i] = 0; lvl[i] = 0; } }
 }
+// ============================================================ Lots (CS2-style parcels)
+// Buildings grow on parcels of W×D tiles that front a connected street; deeper tiles are gardens, yards or parking.
+let lotId = new Int32Array(64 * 64), nextLot = 1;
+const lots = new Map();
+const LOT_SIZES = { 1: [[1, 2, 5], [1, 3, 3], [1, 1, 2], [2, 2, 2], [2, 3, 1]], 2: [[1, 1, 2], [2, 1, 2], [2, 2, 3], [1, 2, 2], [2, 3, 2]], 3: [[2, 2, 4], [2, 3, 3], [1, 2, 2], [3, 3, 2], [1, 3, 2]], 4: [[1, 1, 2], [1, 2, 3], [2, 2, 3], [2, 3, 2]] };
+const DIRS = [[0, 1, 0], [1, 0, Math.PI / 2], [0, -1, Math.PI], [-1, 0, -Math.PI / 2]];   // street direction (x, z) and the matching rotation
+function lotTiles(fx, fz, d, a0, W, D) {
+  const [dx, dz, rot] = DIRS[d], sx = Math.round(Math.cos(rot)), sz = Math.round(-Math.sin(rot)), out = [];
+  for (let b = 0; b < D; b++) for (let a = 0; a < W; a++) { const X = fx + (a - a0) * sx - b * dx, Z = fz + (a - a0) * sz - b * dz; if (!inb(X, Z)) return null; out.push(idx(X, Z)); }
+  return out;   // first W entries are the street-front row
+}
+const lotFree = (i, zt) => zone[i] === zt && type[i] === T_EMPTY && !lotId[i] && !rubble[i];
+function makeLot(zt, tiles, W, D, d, L = 1) {
+  const id = nextLot++, lot = { id, zone: zt, lvl: L, W, D, dir: d, rot: DIRS[d][2], tiles, anchor: tiles[0], v: Math.floor(hash(tiles[0] % N, (tiles[0] / N) | 0, 17) * 97) };
+  let cx = 0, cz = 0; for (const t of tiles) { cx += wx(t % N); cz += wx((t / N) | 0); lotId[t] = id; lvl[t] = L; tree[t] = 0; crime[t] = 0; }
+  lot.cx = cx / tiles.length; lot.cz = cz / tiles.length; lots.set(id, lot); return lot;
+}
+function tryLot(zt, i, d) {
+  const x = i % N, z = (i / N) | 0, sizes = LOT_SIZES[zt].map(s => [s, Math.random() * s[2]]).sort((a, b) => b[1] - a[1]).map(e => e[0]);
+  for (const [W, D] of sizes) for (let a0 = 0; a0 < W; a0++) {
+    const tiles = lotTiles(x, z, d, a0, W, D); if (!tiles || !tiles.every(t => lotFree(t, zt))) continue;
+    const [dx, dz] = DIRS[d];
+    if (!tiles.slice(0, W).every(t => { const X = t % N + dx, Z = ((t / N) | 0) + dz; return inb(X, Z) && connCity[idx(X, Z)]; })) continue;
+    return makeLot(zt, tiles, W, D, d);
+  }
+  return null;
+}
+function setLotLvl(lot, L) { if (L <= 0) return dropLot(lot); lot.lvl = L; for (const t of lot.tiles) lvl[t] = L; }
+function dropLot(lot, rub = 0) { for (const t of lot.tiles) { if (lotId[t] === lot.id) lotId[t] = 0; lvl[t] = 0; burn[t] = 0; burning.delete(t); if (rub) rubble[t] = rub; } lots.delete(lot.id); }
+function validateLots() {   // any edit that touches a parcel (road, rezoning, bulldozer) clears the whole building
+  for (const lot of [...lots.values()]) if (lot.tiles.some(t => lotId[t] !== lot.id || type[t] !== T_EMPTY || zone[t] !== lot.zone || lvl[t] !== lot.lvl)) dropLot(lot);
+}
+const LOTMESH = {};
+function lotMesh(lot) {
+  const zc = 'RCIO'[lot.zone - 1];
+  if (lot.W === 1 && lot.D === 1) { const list = BMESH[zc + lot.lvl]; return list[lot.v % list.length]; }
+  const key = `${zc}${lot.lvl}_${lot.W}x${lot.D}_${lot.v % 3}`;
+  if (!LOTMESH[key]) { LOTGEN[zc](rng(key.split('').reduce((h, c) => h * 31 + c.charCodeAt(0) | 0, 7)), lot.W, lot.D, lot.lvl); LOTMESH[key] = mkInst(finish(), MATS, 160); }
+  return LOTMESH[key];
+}
+const lotAt = i => lots.get(lotId[i]);
 // Which roads reach the outside world (BFS from the highway).
 let conn = new Uint8Array(NN), connCity = new Uint8Array(NN);
 function computeConn() {
@@ -1604,6 +1776,16 @@ function rebuild() {
       if (ovOn && overlay !== 'traffic' && type[i] === T_EMPTY) { const v = ovValue(i); if (v !== null) P(ovM, X, 0, Z, 1, 1, 1, 0, rampColor(v)); }
       continue;
     }
+    if (lotId[i]) {   // one building per parcel, drawn from its street-front corner tile
+      const lot = lotAt(i); if (!lot || i !== lot.anchor) continue;
+      const mesh = lotMesh(lot), rot = lot.rot;
+      for (let a = 0; a < lot.W; a++) bldList.push(lot.tiles[a]);
+      if (ovOn && overlay !== 'traffic') { const v = ovValue(i); v === null ? _C.set(0x9a9ea8) : rampColor(v); }
+      else { _C.setScalar(.95 + H(6) * .05); if (served[i] !== 3 && (served[i] & 3) !== 3) _C.lerp(GRAY, .55); if (burn[i]) _C.lerp(BLACK, .55); }
+      P(mesh, lot.cx, 0, lot.cz, 1, 1, 1, rot, _C);
+      (mesh.geometry.userData.park || []).forEach(([px, pz, pr], k) => { if (H(200 + k) < .65) { const [ox, oz] = rotXZ(px, pz, rot); parkCar(lot.cx + ox, lot.cz + oz, rot + pr + (H(300 + k) < .5 ? 0 : Math.PI), H(400 + k)); } });
+      continue;
+    }
     if (!lvl[i]) {
       P(zoneM, X, 0, Z, 1, 1, 1, 0, ZONE_COLOR[zone[i]]);
       if (ovOn && overlay !== 'traffic' && overlay !== 'happy') { const v = ovValue(i); if (v !== null) P(ovM, X, 0, Z, 1, 1, 1, 0, rampColor(v)); }
@@ -1626,6 +1808,7 @@ function rebuild() {
     P(glowM, q.x + nx * .31 * side, .43, q.z + nz * .31 * side, 1, 1, 1, 0, 0xffffff);
   });
   for (const key in BMESH) for (const m of BMESH[key]) commit(m, counts.get(m) || 0);
+  for (const key in LOTMESH) commit(LOTMESH[key], counts.get(LOTMESH[key]) || 0);
   for (const k in PM) commit(PM[k], counts.get(PM[k]) || 0);
   for (const m of [hwyM, barrierM, railM, signM, roadM, walkM, cornerM, dashM, zebraM, trackM, stainM, holeM, lampM, glowM, tlightM, treeA, treeB, rubbleM, zoneM, ovM, stopM, lineDotM, medianM]) commit(m, counts.get(m) || 0);
   for (const s of services.values()) s.mesh.traverse(o => { if (o.isMesh) o.material = ovOn && overlay !== 'traffic' ? grayMat : MATS; });
@@ -1807,30 +1990,37 @@ function simTick() {
   computeConn(); computeNetworks(); computeCoverage(); computeStats(); computeDemand();
   const D = [0, demand.r, demand.c, demand.i, demand.o];
   let pLeft = net.pCap - net.pUsed, wLeft = net.wCap - net.wUsed;
+  validateLots();
   const cand = [[], [], [], [], []];
   let unlinked = 0;
-  for (let i = 0; i < NN; i++) if (zone[i] && type[i] === T_EMPTY && !lvl[i] && !rubble[i] && nearMask(i, net.pR) && nearMask(i, net.wR)) { if (nearMask(i, connCity)) cand[zone[i]].push(i); else unlinked++; }
+  for (let i = 0; i < NN; i++) {
+    if (!zone[i] || !lotFree(i, zone[i]) || !nearMask(i, net.pR) || !nearMask(i, net.wR)) continue;
+    if (!nearMask(i, connCity)) { unlinked++; continue; }
+    const x = i % N, z = (i / N) | 0;
+    DIRS.forEach(([dx, dz], d) => { const X = x + dx, Z = z + dz; if (inb(X, Z) && connCity[idx(X, Z)]) cand[zone[i]].push([i, d]); });
+  }
   if (unlinked > 3 && month - connWarned > 6) { connWarned = month; const ex = EXIT_ZS[0]; showToast('🛣️ Bölgelerin otoyola bağlı değil, kimse taşınamıyor. Yolunu otoyol çıkışına bağla.', { action: { label: '📍 Çıkış', fn: () => focusOn(HWY_X + 2, ex) } }); }
   for (let zt = 1; zt <= 4; zt++) {
     const d = D[zt], c = cand[zt]; if (d <= .05) continue;
-    let n = Math.min(c.length, Math.ceil(d * 5 * (.5 + Math.random())));
-    while (n-- > 0 && pLeft > 0 && wLeft > 0) {
-      const k = (Math.random() * c.length) | 0, i = c[k]; c[k] = c[c.length - 1]; c.pop();
-      lvl[i] = 1; tree[i] = 0; crime[i] = 0; pLeft--; wLeft--;
-      if (zt === Z_R) arrivals.push(i);
+    let n = Math.ceil(d * 3 * (.5 + Math.random())), tries = 0;
+    while (n > 0 && c.length && pLeft > 0 && wLeft > 0 && tries++ < 60) {
+      const k = (Math.random() * c.length) | 0, [i, dir] = c[k]; c[k] = c[c.length - 1]; c.pop();
+      if (!lotFree(i, zt)) continue;
+      const lot = tryLot(zt, i, dir); if (!lot) continue;
+      n--; pLeft -= lot.tiles.length; wLeft -= lot.tiles.length;
+      if (zt === Z_R) arrivals.push(lot.anchor);
     }
   }
-  for (let i = 0; i < NN; i++) {
-    const L = lvl[i]; if (!L) continue;
-    const d = D[zone[i]];
-    if (L < 3 && (served[i] & 3) === 3 && d > .15 && pLeft > 0 && wLeft > 0 && Math.random() < d * .06 && canUpgrade(i, L)) { lvl[i]++; pLeft--; wLeft--; if (zone[i] === Z_R) arrivals.push(i, i); }
-    else if ((d < -.4 && Math.random() < .02) || (zone[i] === Z_R && happy[i] < 20 && Math.random() < .04)) lvl[i]--;
-    crime[i] = clamp(crime[i] + .03 * L * (1 - cov.police[i]) * Math.min(1, stats.pop / 1000) - .12 * cov.police[i], 0, 1);
-    if (lvl[i] && !burn[i] && stats.pop >= 150 && Math.random() < .0012 * (1 - .85 * cov.fire[i]) * (zone[i] === Z_I ? 2 : 1)) startFire(i);
+  for (const lot of [...lots.values()]) {
+    const i = lot.anchor, L = lot.lvl, d = D[lot.zone], n = lot.tiles.length;
+    if (L < 3 && (served[i] & 3) === 3 && d > .15 && pLeft > n && wLeft > n && Math.random() < d * .08 && canUpgrade(i, L)) { setLotLvl(lot, L + 1); pLeft -= n; wLeft -= n; if (lot.zone === Z_R) arrivals.push(i, i); }
+    else if ((d < -.4 && Math.random() < .02) || (lot.zone === Z_R && happy[i] < 20 && Math.random() < .04)) setLotLvl(lot, L - 1);
+    if (lots.has(lot.id) && !burn[i] && stats.pop >= 150 && Math.random() < .0012 * n * (1 - .85 * cov.fire[i]) * (lot.zone === Z_I ? 2 : 1)) startFire(i);
   }
+  for (let i = 0; i < NN; i++) { const L = lvl[i]; if (L) crime[i] = clamp(crime[i] + .03 * L * (1 - cov.police[i]) * Math.min(1, stats.pop / 1000) - .12 * cov.police[i], 0, 1); }
   for (const i of [...burning]) {
     burn[i]++;
-    if (burn[i] > 4) { burning.delete(i); burn[i] = 0; lvl[i] = 0; rubble[i] = 6; showToast('🔥 Bir bina yanarak yıkıldı. İtfaiye kapsamasını artır.'); }
+    if (burn[i] > 4) { burning.delete(i); burn[i] = 0; const lot = lotAt(i); if (lot) dropLot(lot, 6); else { lvl[i] = 0; rubble[i] = 6; } showToast('🔥 Bir bina yanarak yıkıldı. İtfaiye kapsamasını artır.'); }
   }
   for (let i = 0; i < NN; i++) if (rubble[i]) rubble[i]--;
   computeNetworks(); computeStats();
@@ -1850,7 +2040,7 @@ function simTick() {
   }
   rebuild(); hud(); if (cardCell) showInfo(cardCell);
 }
-function refresh() { computeConn(); computeNetworks(); computeCoverage(); computeStats(); computeDemand(); rebuild(); hud(); }
+function refresh() { validateLots(); computeConn(); computeNetworks(); computeCoverage(); computeStats(); computeDemand(); rebuild(); hud(); }
 
 // ============================================================ Buses
 function roadPath(a, b) {
@@ -2082,7 +2272,8 @@ function drawFires(time) {
   let nf = 0, ns = 0;
   for (const i of burning) {
     if (!lvl[i]) continue;
-    const x = wx(i % N), z = wx((i / N) | 0), h = Math.min(bldMesh(i).geometry.userData.h || .6, 3);
+    const lot = lotAt(i); if (!lot) continue;
+    const x = lot.cx, z = lot.cz, h = Math.min(lotMesh(lot).geometry.userData.h || .6, 3);
     for (let k = 0; k < 5; k++) {
       const a = k * 1.7 + i, s = .8 + .35 * Math.sin(time * 9 + k * 2 + i);
       put(flameM, nf++, x + Math.cos(a) * .2, h * (.25 + .18 * k), z + Math.sin(a) * .2, s, s * (1 + .3 * Math.sin(time * 13 + k)), s, 0, k % 2 ? 0xff7a1a : 0xffc533);
@@ -2579,6 +2770,7 @@ function save(auto = false) {
     type: Array.from(type), zone: Array.from(zone), lvl: Array.from(lvl), tree: Array.from(tree),
     services: [...services.values()].map(({ id, kind, x, z }) => ({ id, kind, x, z })),
     curves: [...curves.values()].map(({ id, p0, p1, p2, tiles, ts }) => ({ id, p0, p1, p2, tiles, ts })), nextCurve,
+    lots: [...lots.values()].map(({ id, zone, lvl, W, D, dir, tiles }) => ({ id, zone, lvl, W, D, dir, tiles })), nextLot,
     xp, policies: [...policies], roadKind: Array.from(roadKind), busStops: [...busStops], busLines: busLines.map(({ id, stops, color }) => ({ id, stops, color })), nextLine };
   const ok = store.set('kentkurucu.save', JSON.stringify(data));
   if (!auto) showToast(ok ? 'Şehir kaydedildi.' : 'Kaydedilemedi (tarayıcı depolaması kapalı).', { cls: ok ? 'ok' : '' });
@@ -2594,6 +2786,10 @@ function load(silent = false) {
   nextCurve = d.nextCurve || nextCurve;
   if (d.roadKind) roadKind = Uint8Array.from(d.roadKind);
   else for (let i = 0; i < NN; i++) if (type[i] === T_ROAD) roadKind[i] = roadKind[i] || K_ROAD;
+  for (const l of d.lots || []) if (l.tiles.every(t => type[t] === T_EMPTY && zone[t] === l.zone && !lotId[t])) { const lot = makeLot(l.zone, l.tiles, l.W, l.D, l.dir, l.lvl); nextLot = Math.max(nextLot, lot.id + 1); }
+  nextLot = Math.max(nextLot, d.nextLot || 1);
+  // older saves: every built tile becomes a 1×1 parcel facing its street
+  for (let i = 0; i < NN; i++) if (lvl[i] && !lotId[i] && zone[i] && type[i] === T_EMPTY) { const rot = facing(i % N, (i / N) | 0), dir = Math.max(0, DIRS.findIndex(q => Math.abs(q[2] - rot) < .01)); makeLot(zone[i], [i], 1, 1, dir, lvl[i]); }
   ensureHighway();
   for (const st of d.busStops || []) busStops.add(st);
   for (const L of d.busLines || []) busLines.push({ ...L, path: null, buses: 0, ok: false });
@@ -2667,6 +2863,7 @@ applyQuality();
   renderer.setAnimationLoop(frame);
   window.__kent = {
     get stats() { return stats; }, get money() { return money; }, get month() { return month; }, get demand() { return demand; }, get net() { return net; },
+    get lots() { const o = {}; for (const l of lots.values()) { const k = 'RCIO'[l.zone - 1] + l.lvl + ' ' + l.W + 'x' + l.D; o[k] = (o[k] || 0) + 1; } return o; },
     get vehicles() { return vehicles.length; }, get vk() { const o = {}; for (const v of vehicles) o[v.kind] = (o[v.kind] || 0) + 1; o.arrivals = arrivals.length; o.sig = sigList.length; return o; }, get burning() { return burning.size; },
     simTick, setTool, newGame, startFire: (x, z) => startFire(idx(x, z)), setOverlay, focusOn, setDay: v => { dayT = v; }, setDayNight: v => { dayNight = v; },
     screen(x, z) { const v = new THREE.Vector3(wx(x), 0, wx(z)).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; },
