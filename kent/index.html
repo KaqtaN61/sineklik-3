@@ -183,6 +183,7 @@
   <button id="rotL" title="Sola döndür"><span class="ms">rotate_left</span></button>
   <button id="rotR" title="Sağa döndür"><span class="ms">rotate_right</span></button>
   <button id="home" title="Merkeze dön"><span class="ms">center_focus_strong</span></button>
+  <button id="followQuick" title="Araç kamerası"><span class="ms">videocam</span></button>
 </div>
 
 <div id="left"><div id="quest" class="panel hidden"></div><div id="warn" class="panel hidden"></div><div id="post" class="panel hidden"></div></div>
@@ -201,14 +202,14 @@
 
 <div id="hint" class="modal hidden">
   <div class="panel">
-    <h2>🏙️ Kent Kurucu</h2>
+    <h2>Kent Kurucu</h2>
     <ol>
-      <li><b>🛣️ Yol</b> çiz: parmağını sürükle, sonra <b>✓</b> ile onayla.</li>
-      <li><b>🏛️ Hizmet</b> menüsünden <b>⚡ Santral</b> ve nehir kenarına <b>💧 Su Kulesi</b> kur, yola bağla.</li>
-      <li><b>🏘️ Bölge</b> menüsünden yol kenarına <b>Konut</b> ve <b>Sanayi</b> çiz. Nüfus artınca <b>Ticari</b> ekle.</li>
-      <li>Şehir büyüdükçe <b>👮 Polis</b>, <b>🚒 İtfaiye</b>, <b>🏫 Okul</b> ve <b>🏥 Hastane</b> kur; yoksa suç, yangın ve mutsuzluk artar.</li>
+      <li>Sol üstteki <b>görev paneli</b> seni adım adım yönlendirir. İlk iş: otoyol çıkışından şehre bir <b>yol</b> çiz.</li>
+      <li><b>Altyapı</b> menüsünden santral ve nehir kenarına su kulesi kur.</li>
+      <li><b>Bölge</b> menüsünden yol kenarlarına konut, sanayi ve ticari alan çiz. Binalar yola bakan parsellere kendiliğinden kurulur, göçmenler otoyoldan gelir.</li>
+      <li>Şehir büyüdükçe <b>Eğitim</b>, <b>Güvenlik</b> ve <b>Hizmet</b> menülerinden okul, polis, itfaiye ve sağlık binaları kur.</li>
     </ol>
-    <p class="muted">Tek parmak: kaydır · İki parmak: döndür ve yakınlaştır (araç seçiliyken iki parmak kaydırır) · Binaya dokun: bilgi. Bilgisayarda sağ tık döndürür, tekerlek yakınlaştırır.</p>
+    <p class="muted">Tek parmak kaydırır, iki parmak döndürür ve yakınlaştırır. Binaya dokununca bilgi açılır. Nüfusa dokununca istatistikler, sağdaki kamera düğmesiyle araç kamerası açılır. Yanlış bir şey yaparsan geri al düğmesini kullan.</p>
     <button class="big" id="hintClose">Başla</button>
   </div>
 </div>
@@ -3378,6 +3379,7 @@ function updateFollow(dt) {
   const k = followSnap ? 1 : 1 - Math.exp(-dt * 4); followSnap = false; controls.target.lerp(_ft, k); camera.position.lerp(_fp, k); camera.lookAt(controls.target);
 }
 $('followBtn').onclick = () => setCamMode('follow');
+$('followQuick').onclick = () => setCamMode('follow');
 $('photoBtn').onclick = () => setCamMode('photo');
 $('camOff').onclick = () => { setCamMode(null); resetView(); };
 $('camNext').onclick = () => pickFollow();
