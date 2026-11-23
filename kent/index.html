@@ -8,30 +8,35 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Kent Kurucu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
 <style>
-  :root { --panel:rgba(14,18,30,.9); --line:#2b3350; --fg:#eef1fb; --muted:#9aa3c3; --acc:#4ade80;
-          --r:#4ade80; --c:#60a5fa; --i:#fbbf24; --bad:#f87171; --btn:#1d2440; --btnb:#333c63;
+  :root { --panel:rgba(20,24,30,.88); --line:rgba(255,255,255,.09); --fg:#e9edf2; --muted:#98a2ad; --acc:#5ab4d6;
+          --r:#7cc46b; --c:#5aa7e0; --i:#e0b54a; --bad:#e2675c; --btn:rgba(255,255,255,.045); --btnb:rgba(255,255,255,.08);
           --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px); --sl:env(safe-area-inset-left,0px); --sr:env(safe-area-inset-right,0px); }
   * { box-sizing:border-box; margin:0; padding:0; }
   html, body { height:100%; overflow:hidden; background:#8fb8d8; color:var(--fg); overscroll-behavior:none;
-    font-family:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size:14px;
+    font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size:14px;
     user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; }
   canvas { display:block; touch-action:none; }
-  button { font:inherit; color:inherit; background:var(--btn); border:1px solid var(--btnb); border-radius:10px; cursor:pointer; touch-action:manipulation; }
+  button { font:inherit; color:inherit; background:var(--btn); border:1px solid var(--btnb); border-radius:6px; cursor:pointer; touch-action:manipulation; }
+  .ms { font-family:'Material Symbols Outlined'; font-weight:normal; font-style:normal; font-size:22px; line-height:1; letter-spacing:normal; text-transform:none; display:inline-block; white-space:nowrap; direction:ltr; font-feature-settings:'liga'; -webkit-font-feature-settings:'liga'; -webkit-font-smoothing:antialiased; font-variation-settings:'FILL' 0, 'wght' 300, 'opsz' 24; overflow:hidden; max-width:1.2em; }
+  .chip .ms { font-size:18px; color:var(--muted); }
   button:active { transform:scale(.96); }
-  .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:6px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); box-shadow:0 2px 10px rgba(0,0,0,.25); }
   .hidden { display:none !important; }
 
   #loading { position:fixed; inset:0; z-index:50; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
-    background:linear-gradient(#1b2a45, #0d1424); text-align:center; padding:24px; }
-  #loading h1 { font-size:30px; letter-spacing:1px; }
+    background:#12161c; text-align:center; padding:24px; }
+  #loading h1 { font-size:26px; font-weight:600; letter-spacing:.5px; }
   #loadTrack { width:min(280px, 80vw); height:8px; border-radius:4px; background:#26314f; overflow:hidden; }
-  #loadBar { height:100%; width:0; background:linear-gradient(90deg, #4ade80, #60a5fa); transition:width .2s; }
+  #loadBar { height:100%; width:0; background:var(--acc); transition:width .2s; }
   #loadMsg { color:var(--muted); font-size:13px; max-width:340px; line-height:1.5; }
 
   #hud { position:fixed; top:calc(6px + var(--st)); left:calc(6px + var(--sl)); right:calc(6px + var(--sr)); display:flex; flex-wrap:wrap; gap:6px; pointer-events:none; z-index:5; }
   #hud > * { pointer-events:auto; }
-  .chip { display:flex; align-items:center; gap:5px; padding:5px 9px; border-radius:12px; min-height:40px; white-space:nowrap; }
+  .chip { display:flex; align-items:center; gap:6px; padding:5px 10px; border-radius:6px; min-height:38px; white-space:nowrap; }
   .chip b { font-size:15px; font-variant-numeric:tabular-nums; }
   .chip small { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
   .neg { color:var(--bad) !important; } .pos { color:var(--acc) !important; }
@@ -41,10 +46,11 @@
   .bar::after { content:""; position:absolute; left:0; right:0; top:50%; height:1px; background:#39405c; }
   #ctl { margin-left:auto; display:flex; gap:4px; padding:4px; }
   #ctl button { width:40px; height:36px; font-size:14px; }
-  #ctl button.on { background:#24543c; border-color:var(--acc); }
+  #ctl button.on { background:rgba(90,180,214,.2); border-color:var(--acc); }
+  #ctl button .ms, #cam button .ms { font-size:20px; }
 
   #cam { position:fixed; right:calc(8px + var(--sr)); top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:6px; z-index:4; }
-  #cam button { width:46px; height:46px; font-size:20px; background:var(--panel); border-color:var(--line); border-radius:50%; }
+  #cam button { width:42px; height:42px; font-size:20px; background:var(--panel); border-color:var(--line); border-radius:6px; display:flex; align-items:center; justify-content:center; }
 
   #bottom { position:fixed; left:calc(6px + var(--sl)); right:calc(6px + var(--sr)); bottom:calc(6px + var(--sb)); display:flex; flex-direction:column; gap:6px; align-items:stretch; z-index:6; pointer-events:none; }
   #bottom > * { pointer-events:auto; }
@@ -56,19 +62,20 @@
   .msRow b { min-width:130px; }
   .pol { display:flex; gap:10px; align-items:center; padding:6px 0; }
   .pol button { min-width:64px; min-height:38px; }
-  .pol button.on { background:#24543c; border-color:var(--acc); }
+  .pol button.on { background:rgba(90,180,214,.2); border-color:var(--acc); }
   #bar button .ic { font-size:22px; line-height:1; }
-  #bar button.on { background:#24543c; border-color:var(--acc); }
+  #bar button { border-color:transparent; background:transparent; color:#cfd6dd; }
+  #bar button.on { background:rgba(90,180,214,.18); border-color:var(--acc); color:#fff; }
   #sub { display:flex; gap:6px; padding:6px; overflow-x:auto; scrollbar-width:none; max-width:560px; width:100%; align-self:center; }
   #sub::-webkit-scrollbar { display:none; }
   #sub button { flex:0 0 auto; min-width:74px; height:66px; padding:0 6px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; font-size:11.5px; line-height:1.15; }
   #sub button .ic { font-size:22px; }
   #sub button .cost { color:var(--muted); font-size:10.5px; }
-  #sub button.on { background:#24543c; border-color:var(--acc); }
+  #sub button.on { background:rgba(90,180,214,.18); border-color:var(--acc); }
   #active, #confirm { align-self:center; display:flex; align-items:center; gap:8px; padding:6px 6px 6px 14px; max-width:100%; }
   #active span, #confirm span { font-size:14px; }
   #active button, #confirm button { height:42px; min-width:52px; padding:0 12px; font-size:15px; }
-  #cYes { background:#1f6b44; border-color:var(--acc); font-size:20px !important; }
+  #cYes { background:rgba(90,180,214,.3); border-color:var(--acc); font-size:20px !important; }
   #cYes:disabled { opacity:.4; }
   #cNo { font-size:18px !important; }
 
@@ -78,11 +85,11 @@
   .meter { display:inline-block; width:70px; height:7px; background:#0b0e18; border-radius:4px; vertical-align:middle; overflow:hidden; margin-left:4px; }
   .meter i { display:block; height:100%; }
 
-  #warn { position:fixed; left:calc(6px + var(--sl)); top:calc(100px + var(--st)); max-width:min(300px, calc(100vw - 80px)); padding:8px 12px; color:#fde68a; line-height:1.4; font-size:13px; z-index:3; }
+  #warn { position:fixed; left:calc(6px + var(--sl)); top:calc(100px + var(--st)); max-width:min(300px, calc(100vw - 80px)); padding:8px 12px; color:#e9d8a6; line-height:1.4; font-size:12.5px; z-index:3; border-left:3px solid var(--i); }
   #toast { position:fixed; top:calc(100px + var(--st)); left:50%; transform:translateX(-50%); padding:10px 14px; border-radius:12px; z-index:20;
-    background:rgba(127,29,29,.95); color:#fff; opacity:0; transition:opacity .25s; pointer-events:none; text-align:center; max-width:calc(100vw - 24px); display:flex; gap:10px; align-items:center; }
-  #toast.ok { background:rgba(22,101,52,.95); }
-  #toast.info { background:rgba(30,41,80,.95); }
+    background:rgba(20,24,30,.94); border-left:3px solid var(--bad); color:#fff; opacity:0; transition:opacity .25s; pointer-events:none; text-align:center; max-width:calc(100vw - 24px); display:flex; gap:10px; align-items:center; }
+  #toast.ok { border-left-color:var(--r); }
+  #toast.info { border-left-color:var(--acc); }
   #toast.show { opacity:1; }
   #toast button { padding:6px 10px; background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.3); }
 
@@ -93,7 +100,7 @@
   .row { display:flex; gap:8px; align-items:center; margin:8px 0; flex-wrap:wrap; }
   .row > b { min-width:84px; }
   .row button { min-height:42px; padding:0 14px; }
-  .row button.on { background:#24543c; border-color:var(--acc); }
+  .row button.on { background:rgba(90,180,214,.2); border-color:var(--acc); }
   .big { width:100%; min-height:48px; font-size:16px; margin-top:6px; }
   .muted { color:var(--muted); font-size:13px; }
   table { width:100%; border-collapse:collapse; font-size:13px; } td { padding:2px 0; } td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
@@ -110,7 +117,7 @@
 </head>
 <body>
 <div id="loading">
-  <h1>🏙️ Kent Kurucu</h1>
+  <h1>Kent Kurucu</h1>
   <div id="loadTrack"><div id="loadBar"></div></div>
   <div id="loadMsg">Şehir yükleniyor…</div>
   <script>
@@ -125,10 +132,10 @@
 </div>
 
 <div id="hud">
-  <div class="chip panel">💰 <b id="money">₺0</b><small id="flow"></small></div>
-  <div class="chip panel">👥 <b id="pop">0</b></div>
-  <div class="chip panel">😊 <b id="happy">—</b></div>
-  <div class="chip panel">📅 <b id="date"></b></div>
+  <div class="chip panel"><span class="ms">payments</span><b id="money">₺0</b><small id="flow"></small></div>
+  <div class="chip panel"><span class="ms">groups</span><b id="pop">0</b></div>
+  <div class="chip panel"><span class="ms">sentiment_satisfied</span><b id="happy">—</b></div>
+  <div class="chip panel"><span class="ms">calendar_month</span><b id="date"></b></div>
   <div class="chip panel" id="rci" title="Talep: Konut / Ticari / Sanayi / Ofis">
     <div class="bar" style="color:var(--r)"><i id="dR"></i></div>
     <div class="bar" style="color:var(--c)"><i id="dC"></i></div>
@@ -137,14 +144,14 @@
   </div>
   <button class="chip panel" id="msChip" style="flex-direction:column;align-items:stretch;gap:3px;padding:5px 9px"><b id="msName" style="font-size:13px">🏆 Köy</b><span class="meter" style="width:84px;margin:0"><i id="msBar" style="width:0%;background:#fbbf24"></i></span></button>
   <div id="ctl" class="panel">
-    <button data-speed="0">⏸</button><button data-speed="1">▶</button><button data-speed="2">⏩</button><button id="menuBtn">☰</button>
+    <button data-speed="0"><span class="ms">pause</span></button><button data-speed="1"><span class="ms">play_arrow</span></button><button data-speed="2"><span class="ms">fast_forward</span></button><button id="menuBtn"><span class="ms">menu</span></button>
   </div>
 </div>
 
 <div id="cam">
-  <button id="rotL" title="Sola döndür">⟲</button>
-  <button id="rotR" title="Sağa döndür">⟳</button>
-  <button id="home" title="Merkeze dön">⌂</button>
+  <button id="rotL" title="Sola döndür"><span class="ms">rotate_left</span></button>
+  <button id="rotR" title="Sağa döndür"><span class="ms">rotate_right</span></button>
+  <button id="home" title="Merkeze dön"><span class="ms">center_focus_strong</span></button>
 </div>
 
 <div id="warn" class="panel hidden"></div>
@@ -152,8 +159,8 @@
 
 <div id="bottom">
   <div id="card" class="panel hidden"></div>
-  <div id="confirm" class="panel hidden"><span id="cText"></span><button id="cNo">✕</button><button id="cYes">✓</button></div>
-  <div id="active" class="panel hidden"><span id="aText"></span><button id="aEnd">✕ Bitir</button></div>
+  <div id="confirm" class="panel hidden"><span id="cText"></span><button id="cNo"><span class="ms">close</span></button><button id="cYes"><span class="ms">check</span></button></div>
+  <div id="active" class="panel hidden"><span id="aText"></span><button id="aEnd">Bitir</button></div>
   <div id="sub" class="panel hidden"></div>
   <div id="bar" class="panel"></div>
 </div>
@@ -192,7 +199,7 @@
     <div class="row"><b>Gece/gündüz</b><button id="dnBtn">Açık</button></div>
     <div class="row"><button id="save">💾 Kaydet</button><button id="load">📂 Yükle</button><button id="new">🆕 Yeni şehir</button></div>
     <div class="row"><button id="fs">⛶ Tam ekran</button><button id="help">❔ Nasıl oynanır</button></div>
-    <p class="muted">Dokular: Poly Haven (polyhaven.com, CC0) · Araçlar: Kenney Car Kit (kenney.nl, CC0)</p>
+    <p class="muted">Binalar: Quaternius Downtown City MegaKit (quaternius.com, CC0) · Dokular: Poly Haven (polyhaven.com, CC0) · Araçlar: Kenney Car Kit (kenney.nl, CC0) · İkonlar: Material Symbols (Google, Apache 2.0)</p>
     <button class="big" id="menuClose">Kapat</button>
   </div>
 </div>
@@ -1029,6 +1036,7 @@ function qLot(r, W, D, zoneC, L) {
   const Wm = W * 16 - (W > 1 ? 2 : 3), styles = zoneC === 'O' ? ['stone', 'loft', 'pale'] : zoneC === 'C' ? ['brick', 'loft', 'stone', 'pale'] : ['brick', 'pale', 'brick', 'stone'];
   const style = pick(r, styles), ground = zoneC === 'R' ? (r() < .35 ? 'shop' : 'res') : zoneC === 'O' ? 'office' : 'shop';
   const Fmax = L === 1 ? 3 : L === 2 ? 6 : 10, F = Math.max(2, Fmax - (r() * 2 | 0));
+  if (zoneC === 'R' && L === 1) return qRowHouses(r, W, D, F);
   const Dm = Math.min(D * 16 - 4, L === 1 ? 10 : 12 + (D > 1 ? 4 : 0)), tint = pick(r, [0xffffff, 0xffffff, 0xe9d8cc, 0xcfc0b4, 0xffe7d2]);
   const zFront = D * 8 - 1.2, cz = zFront - Dm / 2;
   lotGround(W, D, M.PAVE);
@@ -1040,6 +1048,31 @@ function qLot(r, W, D, zoneC, L) {
   // behind the building: parking or a courtyard with trees
   const backZ = (cz - Dm / 2) * MU, depth = backZ + D / 2;
   if (depth > .35) { if (zoneC !== 'R' || r() < .5) parking(-W / 2 + .1, W / 2 - .1, -D / 2 + .06, backZ - .04); else { box(W - .2, .02, depth - .1, 0, .02, -D / 2 + depth / 2, M.LAWN); for (let k = 0; k < W * 2; k++) blob(.08, -W / 2 + .3 + k * (W - .6) / Math.max(1, W * 2 - 1), .2, -D / 2 + depth / 2, 0x4f8a3a, k); } }
+}
+// Low density: narrow brick row houses with stoops on the street and gardens behind
+function qRowHouses(r, W, D, F) {
+  lotGround(W, D, M.LAWN);
+  const n = W * 2, hw = 8, Dm = 10, zFront = D * 8 - 2, cz = zFront - Dm / 2;
+  for (let k = 0; k < n; k++) {
+    const x = (-W * 8 + 4 + k * 8), style = pick(r, ['brick', 'brick', 'pale', 'stone']), tint = pick(r, [0xffffff, 0xe6d2c4, 0xcdb9ab, 0xffe2cc, 0xd9d9d9]);
+    const k0 = PARTS.length; qBuilding(r, hw, Dm, F, style, 'res', { tint, mansard: r() < .4 });
+    for (let j = k0; j < PARTS.length; j++) PARTS[j][0].translate(x * MU, .02, cz * MU);
+  }
+  const by = (cz - Dm / 2) * MU, depth = by + D / 2;
+  for (let k = 0; k < n; k++) { const x = (-W * 8 + 4 + k * 8) * MU; box(.006, .04, depth, x - .25, .02, -D / 2 + depth / 2, M.TRIM, 0xb89a78); if (r() < .7) blob(.07 + r() * .04, x + (r() - .5) * .3, .16, -D / 2 + depth * (.3 + r() * .4), 0x4f8a3a, k * 11); }
+  box(W - .02, .04, .006, 0, .02, -D / 2 + .01, M.TRIM, 0xb89a78);
+}
+// Factories and warehouses: brick/metal loft halls in a fenced yard with docks, containers, silos and chimneys
+function qIndustry(r, W, D, L) {
+  box(W - .02, .02, D - .02, 0, 0, 0, M.RGRAVEL, 0x7d7a73); fence(W, D);
+  const Wm = W * 16 - 4, Dm = Math.max(10, Math.min(D * 16 - 8, D * 10)), F = L === 1 ? 2 : L === 2 ? 3 : 4, zc = -D * 8 + 2 + Dm / 2;
+  const k0 = PARTS.length; qBuilding(r, Wm, Dm, F, pick(r, ['loft', 'brick', 'loft']), 'shop', { mansard: false, tint: pick(r, [0xffffff, 0xd9cfc6, 0xbfb3a8]) });
+  for (let k = k0; k < PARTS.length; k++) PARTS[k][0].translate(0, .02, zc * MU);
+  const yz = (zc + Dm / 2) * MU, yd = D / 2 - yz;
+  if (yd > .3) { box(W - .3, .004, yd - .1, 0, .021, yz + yd / 2, M.TRIM, 0x45484d); for (let k = 0; k < Math.max(1, Math.round((W - .4) / .3)); k++) PARK.push([-W / 2 + .3 + k * .3, yz + yd / 2, Math.PI / 2]); }
+  if (L >= 2) { const x = W / 2 - .2, z = -D / 2 + .2; cyl(.04, .06, 1.1 + r() * .6, x, .02, z, M.TRIM, 0xb9b4ad, 12); cyl(.043, .043, .07, x, .95, z, M.PAINT, 0x8a3a2e, 12); }
+  if (L === 3) for (let k = 0; k < 3; k++) cyl(.1, .1, .6, -W / 2 + .2 + k * .22, .02, -D / 2 + .16, M.TRIM, 0xcfd2d4, 16);
+  for (let k = 0; k < 2 + (r() * 3 | 0); k++) box(.24, .1, .1, W / 2 - .25, .02 + (k % 2) * .1, D / 2 - .2 - (k >> 1) * .12, M.PAINT, pick(r, [0x2f5d80, 0x8a3a2e, 0x3c6043, 0xa3843c, 0x5b6168]));
 }
 // ============================================================ Parcel (lot) buildings
 // A lot is W tiles of street frontage × D tiles deep. Local frame: x along the street, front edge at z = +D/2.
@@ -1084,7 +1117,7 @@ function frontBlock(W, D, bd, fl, wall, tint, shops) {
 }
 const LOTGEN = {
   R(r, W, D, L) {
-    if (L >= 2 && MK) return qLot(r, W, D, 'R', L);
+    if (MK) return qLot(r, W, D, 'R', L);
     const fz = (D - 1) / 2;
     if (L === 1 || W === 1) {   // houses (or a single block) per frontage tile, gardens / parking behind
       for (let a = 0; a < W; a++) {
@@ -1142,7 +1175,8 @@ const LOTGEN = {
     }
   },
   I(r, W, D, L) {
-    if (W === 1 && D === 1) return GEN['I' + L](r);
+    if (W === 1 && D === 1 && !MK) return GEN['I' + L](r);
+    if (MK) return qIndustry(r, W, D, L);
     box(W - .02, .02, D - .02, 0, 0, 0, M.RGRAVEL, 0x8a857c); fence(W, D);
     const hw = W - .3, hd = Math.max(.5, D * .55), hz = -D / 2 + .15 + hd / 2, wall = pick(r, [M.IND, M.IND, M.INDBRICK]), h = L === 1 ? .32 : L === 2 ? .42 : .55;
     fbox(hw, h, hd, 0, .02, hz, wall, pick(r, [0xffffff, 0xe6ecf2, 0xf2ece0, 0xdfe6dc]), 1);
@@ -1773,7 +1807,7 @@ function validateLots() {   // any edit that touches a parcel (road, rezoning, b
 const LOTMESH = {};
 function lotMesh(lot) {
   const zc = 'RCIO'[lot.zone - 1];
-  if (lot.W === 1 && lot.D === 1 && (zc === 'I' || (zc === 'R' && lot.lvl === 1) || !MK)) { const list = BMESH[zc + lot.lvl]; return list[lot.v % list.length]; }
+  if (lot.W === 1 && lot.D === 1 && !MK) { const list = BMESH[zc + lot.lvl]; return list[lot.v % list.length]; }
   const key = `${zc}${lot.lvl}_${lot.W}x${lot.D}_${lot.v % 2}`;
   if (!LOTMESH[key]) { LOTGEN[zc](rng(key.split('').reduce((h, c) => h * 31 + c.charCodeAt(0) | 0, 7)), lot.W, lot.D, lot.lvl); LOTMESH[key] = mkInst(finish(), MATS, 160); }
   return LOTMESH[key];
@@ -1956,7 +1990,7 @@ function rebuild() {
       if (ovOn && overlay !== 'traffic') { const v = ovValue(i); v === null ? _C.set(0x9a9ea8) : rampColor(v); }
       else { _C.setScalar(.95 + H(6) * .05); if (served[i] !== 3 && (served[i] & 3) !== 3) _C.lerp(GRAY, .55); if (burn[i]) _C.lerp(BLACK, .55); }
       P(mesh, lot.cx, 0, lot.cz, 1, 1, 1, rot, _C);
-      (mesh.geometry.userData.park || []).forEach(([px, pz, pr], k) => { if (H(200 + k) < .45) { const [ox, oz] = rotXZ(px, pz, rot); parkCar(lot.cx + ox, lot.cz + oz, rot + pr + (H(300 + k) < .5 ? 0 : Math.PI), H(400 + k)); } });
+      (mesh.geometry.userData.park || []).forEach(([px, pz, pr], k) => { if (H(200 + k) < .32) { const [ox, oz] = rotXZ(px, pz, rot); parkCar(lot.cx + ox, lot.cz + oz, rot + pr + (H(300 + k) < .5 ? 0 : Math.PI), H(400 + k)); } });
       continue;
     }
     if (!lvl[i]) {
@@ -2009,7 +2043,7 @@ function makeServiceMesh(kind) {
     if (!svcGeoCache.rotor) { for (let k = 0; k < 3; k++) { const b = new THREE.BoxGeometry(.03, .48, .008); b.translate(0, .24, 0); b.rotateZ(k * 2.094); addPart(b, M.TRIM, 0xf7f7f5); } svcGeoCache.rotor = finish(); }
     const rotor = new THREE.Mesh(svcGeoCache.rotor, MATS); rotor.position.set(0, 1.2, .06); rotor.castShadow = true; grp.add(rotor); spinners.add(rotor);
   }
-  if (kind !== 'park' && kind !== 'plaza' && kind !== 'wind') { const s = new THREE.Sprite(badge(d.icon)); s.scale.set(.5, .5, 1); s.position.set(0, svcGeoCache[kind].userData.h + .4, 0); grp.add(s); }
+  if (false) { const s = new THREE.Sprite(badge(d.icon)); s.scale.set(.5, .5, 1); s.position.set(0, svcGeoCache[kind].userData.h + .4, 0); grp.add(s); }
   return grp;
 }
 
@@ -2512,11 +2546,23 @@ function updateDay(dt) {
 let tool = null, dragStart = null, hover = null, pending = null, cardCell = null, openCat = null;
 const pointers = new Map();
 
+const ms = n => `<span class="ms">${n}</span>`;
+const CAT_MS = { road: 'add_road', zone: 'domain', util: 'bolt', edu: 'school', safe: 'local_police', svc: 'account_balance', bus: 'directions_bus', mark: 'location_city', bull: 'delete', layer: 'layers' };
+const TOOL_MS = { gravel: 'landscape', road: 'add_road', curve: 'route', treeroad: 'nature', avenue: 'merge', res: 'home', com: 'storefront', ind: 'factory', off: 'apartment', dezone: 'ink_eraser',
+  busstop: 'signpost', busline: 'timeline', bulldoze: 'delete', power: 'bolt', wind: 'wind_power', solar: 'solar_power', water: 'water_drop', sewage: 'plumbing', landfill: 'delete_sweep',
+  park: 'park', plaza: 'deck', policepost: 'local_police', police: 'local_police', policehq: 'shield', firepost: 'fire_extinguisher', fire: 'local_fire_department', firehq: 'fire_truck',
+  kinder: 'child_care', school: 'school', highschool: 'menu_book', univ: 'account_balance', clinic: 'medical_services', hospital: 'local_hospital', cemetery: 'yard', post: 'local_post_office',
+  depot: 'directions_bus', clock: 'schedule', stadium: 'stadium', tvtower: 'cell_tower', culture: 'museum' };
+const LAYER_MS = { none: 'block', traffic: 'traffic', util: 'bolt', sewage: 'plumbing', garbage: 'delete', pollution: 'factory', transit: 'directions_bus', police: 'local_police', fire: 'local_fire_department', school: 'school', health: 'local_hospital', land: 'diamond', happy: 'sentiment_satisfied' };
+// strip emoji from every text the game shows: plain text and line icons only
+const EMO = /\p{Extended_Pictographic}\uFE0F?\s?/gu;
+new MutationObserver(list => { for (const m of list) { const nodes = m.type === 'characterData' ? [m.target] : [...m.addedNodes]; for (const n of nodes) { const w = n.nodeType === 3 ? [n] : n.nodeType === 1 ? (() => { const out = [], it = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); while (it.nextNode()) out.push(it.currentNode); return out; })() : []; for (const t of w) if (EMO.test(t.data)) { EMO.lastIndex = 0; t.data = t.data.replace(EMO, ''); } EMO.lastIndex = 0; } } }).observe(document.body, { subtree: true, childList: true, characterData: true });
+{ const it = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); const all = []; while (it.nextNode()) all.push(it.currentNode); for (const t of all) t.data = t.data.replace(EMO, ''); }
 function buildBar() {
   const bar = $('bar'); bar.innerHTML = '';
   for (const c of CATS) {
     const b = document.createElement('button'); b.dataset.cat = c.id;
-    b.innerHTML = `<span class="ic">${c.icon}</span><span>${c.name}</span>`;
+    b.innerHTML = `<span class="ic">${ms(CAT_MS[c.id] || 'apps')}</span><span>${c.name}</span>`;
     b.onclick = () => {
       if (c.tool) { closeSub(); setTool(tool === c.tool ? null : c.tool); return; }
       if (openCat === c.id) closeSub(); else openSub(c);
@@ -2530,7 +2576,7 @@ function openSub(c) {
   for (const it of items) {
     const b = document.createElement('button');
     const lock = !c.layers && !unlocked(it.id), built = !c.layers && SVC[it.id]?.unique && [...services.values()].some(s => s.kind === it.id);
-    b.innerHTML = `<span class="ic">${lock ? '🔒' : it.ic}</span><span>${it.name}</span><span class="cost">${lock ? MILESTONES[TOOLDEF[it.id].ms].name : built ? 'kuruldu' : it.cost}</span>`;
+    b.innerHTML = `<span class="ic">${ms(lock ? 'lock' : (c.layers ? LAYER_MS[it.id] : TOOL_MS[it.id]) || 'apps')}</span><span>${it.name}</span><span class="cost">${lock ? MILESTONES[TOOLDEF[it.id].ms].name : built ? 'kuruldu' : it.cost}</span>`;
     b.classList.toggle('on', c.layers ? overlay === it.id : tool === it.id);
     b.classList.toggle('locked', lock || built);
     b.onclick = () => {
@@ -2868,7 +2914,7 @@ function setBar(el, d) { const h = Math.abs(d) * 50; el.style.height = h + '%'; 
 const hasSvc = k => [...services.values()].some(s => s.kind === k);
 function hudMilestone() {
   const m = MILESTONES[msLevel], nx = MILESTONES[msLevel + 1];
-  $('msName').textContent = `🏆 ${m.name}`;
+  $('msName').textContent = m.name;
   $('msBar').style.width = (nx ? Math.min(100, (xp - m.xp) / (nx.xp - m.xp) * 100) : 100) + '%';
 }
 function renderMilestones() {
