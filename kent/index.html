@@ -47,6 +47,7 @@
   #ctl { margin-left:auto; display:flex; gap:4px; padding:4px; }
   #ctl button { width:40px; height:36px; font-size:14px; }
   #ctl button.on { background:rgba(90,180,214,.2); border-color:var(--acc); }
+  #ctl button:disabled { opacity:.35; }
   #ctl button .ms, #cam button .ms { font-size:20px; }
 
   #cam { position:fixed; right:calc(8px + var(--sr)); top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:6px; z-index:4; }
@@ -164,7 +165,7 @@
   </div>
   <button class="chip panel" id="msChip" style="flex-direction:column;align-items:stretch;gap:3px;padding:5px 9px"><b id="msName" style="font-size:13px">🏆 Köy</b><span class="meter" style="width:84px;margin:0"><i id="msBar" style="width:0%;background:#fbbf24"></i></span></button>
   <div id="ctl" class="panel">
-    <button data-speed="0"><span class="ms">pause</span></button><button data-speed="1"><span class="ms">play_arrow</span></button><button data-speed="2"><span class="ms">fast_forward</span></button><button id="feedBtn" title="Kent akışı"><span class="ms">forum</span><span class="n hidden" id="feedN">0</span></button><button id="menuBtn"><span class="ms">menu</span></button>
+    <button data-speed="0"><span class="ms">pause</span></button><button data-speed="1"><span class="ms">play_arrow</span></button><button data-speed="2"><span class="ms">fast_forward</span></button><button id="undoBtn" title="Geri al" disabled><span class="ms">undo</span></button><button id="feedBtn" title="Kent akışı"><span class="ms">forum</span><span class="n hidden" id="feedN">0</span></button><button id="menuBtn"><span class="ms">menu</span></button>
   </div>
 </div>
 
@@ -228,6 +229,7 @@
     <div class="row"><b>Grafik</b><button data-q="0">Düşük</button><button data-q="1">Orta</button><button data-q="2">Yüksek</button></div>
     <div class="row"><b>Gece/gündüz</b><button id="dnBtn">Açık</button></div>
     <div class="row"><b>Ses</b><button id="sndBtn">Açık</button></div>
+    <div class="row"><b>Sınırsız para</b><button id="sbBtn">Kapalı</button><span class="muted">Serbest mod: bütçe derdi olmadan inşa et.</span></div>
     <div class="row"><button id="save">💾 Kaydet</button><button id="load">📂 Yükle</button><button id="new">🆕 Yeni şehir</button></div>
     <div class="row"><button id="fs">⛶ Tam ekran</button><button id="help">❔ Nasıl oynanır</button></div>
     <p class="muted">Binalar: Quaternius Downtown City MegaKit (quaternius.com, CC0) · Dokular: Poly Haven (polyhaven.com, CC0) · Araçlar: Kenney Car Kit (kenney.nl, CC0) · İkonlar: Material Symbols (Google, Apache 2.0)</p>
@@ -288,10 +290,11 @@ const SVC = {
   clock:    { name: 'Saat Kulesi',       icon: '🕰️', size: 2, cost: 25000, upkeep: 100, radius: 12, cov: 'landmark', unique: 1, tourism: 450, ms: 5 },
   stadium:  { name: 'Stadyum',           icon: '🏟️', size: 3, cost: 45000, upkeep: 300, radius: 16, cov: 'landmark', unique: 1, tourism: 950, ms: 6 },
   tvtower:  { name: 'TV Kulesi',         icon: '🗼', size: 2, cost: 60000, upkeep: 200, radius: 18, cov: 'landmark', unique: 1, tourism: 1300, ms: 7 },
+  island:   { name: 'Kavşak Göbeği',     icon: '🌳', size: 1, cost: 0,     upkeep: 5,   ms: 99, park: 1, hidden: 1 },
   culture:  { name: 'Kültür Merkezi',    icon: '🏛️', size: 3, cost: 80000, upkeep: 350, radius: 18, cov: 'landmark', unique: 1, tourism: 1700, ms: 8 },
 };
 const TOOLDEF = {
-  gravel: { icon: '🟫', name: 'Toprak Yol', cost: '₺5/kare', ms: 0 }, treeroad: { icon: '🌳', name: 'Ağaçlı Yol', cost: '₺18/kare', ms: 2 },
+  gravel: { icon: '🟫', name: 'Toprak Yol', cost: '₺5/kare', ms: 0 }, roundabout: { icon: '⭕', name: 'Göbekli Kavşak', cost: '₺900', ms: 1 }, treeroad: { icon: '🌳', name: 'Ağaçlı Yol', cost: '₺18/kare', ms: 2 },
   road: { icon: '🛣️', name: 'Düz Yol', cost: '₺10/kare', ms: 0 }, curve: { icon: '〰️', name: 'Kavisli Yol', cost: '₺12/kare', ms: 0 },
   avenue: { icon: '🛤️', name: 'Geniş Cadde', cost: '₺25/kare', ms: 3 },
   res: { icon: '🏠', name: 'Konut', cost: 'bölge', zone: Z_R, ms: 0 }, com: { icon: '🏬', name: 'Ticari', cost: 'bölge', zone: Z_C, ms: 0 },
@@ -302,7 +305,7 @@ const TOOLDEF = {
 };
 for (const k in SVC) TOOLDEF[k] = { icon: SVC[k].icon, name: SVC[k].name, cost: '₺' + SVC[k].cost.toLocaleString('tr-TR'), svc: k, ms: SVC[k].ms };
 const CATS = [
-  { id: 'road', icon: '🛣️', name: 'Yol', items: ['gravel', 'road', 'curve', 'treeroad', 'avenue'] },
+  { id: 'road', icon: '🛣️', name: 'Yol', items: ['gravel', 'road', 'curve', 'treeroad', 'avenue', 'roundabout'] },
   { id: 'zone', icon: '🏘️', name: 'Bölge', items: ['res', 'com', 'ind', 'off', 'dezone'] },
   { id: 'util', icon: '⚡', name: 'Altyapı', items: ['power', 'wind', 'solar', 'water', 'sewage', 'landfill'] },
   { id: 'edu', icon: '🎓', name: 'Eğitim', items: ['kinder', 'school', 'highschool', 'univ'] },
@@ -336,9 +339,9 @@ const POLICIES = {
 const POLICY_MS = 3;
 const LINE_COLORS = [0xe63946, 0x2a9d8f, 0xf4a261, 0x457b9d, 0x9b5de5, 0xf15bb5, 0x00a6d6, 0x6a994e];
 // Road kinds stored in roadKind[]: 1 street, 2 avenue, 3 highway (fixed), 4 gravel, 5 tree-lined
-const K_ROAD = 1, K_AVE = 2, K_HWY = 3, K_GRAVEL = 4, K_TREE = 5;
+const K_ROAD = 1, K_AVE = 2, K_HWY = 3, K_GRAVEL = 4, K_TREE = 5, K_ROUND = 6;
 const ROADK = { road: { kind: K_ROAD, cost: 10 }, gravel: { kind: K_GRAVEL, cost: 5 }, treeroad: { kind: K_TREE, cost: 18 } };
-const ROAD_NAME = { [K_ROAD]: '🛣️ Yol', [K_AVE]: '🛤️ Geniş Cadde', [K_HWY]: '🛣️ Otoyol', [K_GRAVEL]: '🟫 Toprak Yol', [K_TREE]: '🌳 Ağaçlı Yol' };
+const ROAD_NAME = { [K_ROUND]: 'Göbekli Kavşak', [K_ROAD]: '🛣️ Yol', [K_AVE]: '🛤️ Geniş Cadde', [K_HWY]: '🛣️ Otoyol', [K_GRAVEL]: '🟫 Toprak Yol', [K_TREE]: '🌳 Ağaçlı Yol' };
 // The fixed highway: a column across the map with two exits; people move in and commute through it.
 const HWY_X = 12, EXIT_ZS = [24, 40];
 const HWY_EXITS = new Set(EXIT_ZS.map(z => z * 64 + HWY_X)), STUBS = new Set(EXIT_ZS.flatMap(z => [z * 64 + HWY_X + 1, z * 64 + HWY_X + 2]));
@@ -1548,7 +1551,7 @@ const LOCAR = [0xe8e8e6, 0xf2f2f2, 0x2a2d31, 0x18263d, 0x8b8f94, 0x2b2b2b, 0xb9b
 const CIV = ['sedan', 'sedan-sports', 'hatchback-sports', 'suv', 'suv-luxury', 'taxi', 'van'], TRUCKS = ['delivery', 'truck', 'garbage-truck'], SPECIAL = ['police', 'ambulance', 'firetruck'];
 const CAR_SCALE = .11, CAR_FLIP = 0, CAR_TINT = [0xffffff, 0xffffff, 0xffffff, 0xf2d6d6, 0xd8e4f5, 0xdedede, 0x9a9a9a, 0xe8f0d8];
 let CARS = null, CARTEX = null;
-let craneM, jibM, carLo, hwyM, barrierM, railM, signM, sigM, sig = new Uint8Array(4096), sigList = [], roadM, walkM, cornerM, dashM, zebraM, lampM, tlightM, treeA, treeB, pedM, stainM, trackM, holeM, stopM, lineDotM, medianM, snowPts, rubbleM, zoneM, ovM, prevM, beaconM, flameM, smokeM, glowM;
+let roundM, roundI, craneM, jibM, carLo, hwyM, barrierM, railM, signM, sigM, sig = new Uint8Array(4096), sigList = [], roadM, walkM, cornerM, dashM, zebraM, lampM, tlightM, treeA, treeB, pedM, stainM, trackM, holeM, stopM, lineDotM, medianM, snowPts, rubbleM, zoneM, ovM, prevM, beaconM, flameM, smokeM, glowM;
 const glowMat = new THREE.MeshBasicMaterial({ color: 0xffd39a, transparent: true, opacity: 0, toneMapped: false, depthWrite: false });
 
 function wearTex(kind) {
@@ -1665,6 +1668,18 @@ function buildMeshes() {
   for (let k = 0; k < 10; k++) { box(.03, .1, .03, 0, k * .1, 0, M.PAINT, 0xe0a82e); box(.034, .004, .034, 0, k * .1 + .05, 0, M.TRIM, 0x8a6a1e); }
   box(.06, .04, .06, 0, 0, 0, M.TRIM, 0x6b6f75);
   craneM = mkInst(finish(), MATS, 60);
+  { // roundabout: asphalt ring with markings and a curb; green island with a tree on top
+    const ring = new THREE.RingGeometry(.52, 1.52, 48, 1); ring.rotateX(-Math.PI / 2); ring.translate(0, .021, 0);
+    roundM = mkInst(ring, new THREE.MeshStandardMaterial({ map: texFrom(IMG.asphalt.diff, true, 2), normalMap: texFrom(IMG.asphalt.nor, false, 2), roughness: .92, color: 0x9a9a9a }), 40, false);
+    const curb = new THREE.CylinderGeometry(.55, .55, .045, 40, 1, true); curb.translate(0, .022, 0); addPart(curb, M.TRIM, 0xd8d6d0);
+    const top = new THREE.CylinderGeometry(.55, .55, .02, 40); top.translate(0, .035, 0); addPart(top, M.LAWN, 0xffffff);
+    const outer = new THREE.CylinderGeometry(1.53, 1.53, .034, 48, 1, true); outer.translate(0, .017, 0); addPart(outer, M.PAVE, 0xffffff);
+    for (let k = 0; k < 24; k++) { const a = k / 24 * Math.PI * 2, g = new THREE.BoxGeometry(.012, .002, .12); g.rotateY(-a); g.translate(Math.cos(a) * 1.02, .023, Math.sin(a) * 1.02); addPart(g, M.TRIM, 0xf2f2ec); }
+    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + .3, g = new THREE.BoxGeometry(.18, .003, .03); g.rotateY(-a); g.translate(Math.cos(a) * 1.35, .023, Math.sin(a) * 1.35); addPart(g, M.TRIM, 0xffffff); }
+    cyl(.012, .018, .2, 0, .04, 0, M.TRIM, 0x5a4632, 6); blob(.16, 0, .32, 0, 0x4b8a36, 77);
+    for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; box(.05, .02, .05, Math.cos(a) * .38, .04, Math.sin(a) * .38, M.LEAF, [0xd96aa0, 0xf2c94c, 0xe8664f, 0xb07ad9][k % 4]); }
+    roundI = mkInst(finish(), MATS, 40);
+  }
   box(.62, .022, .03, .18, 0, 0, M.PAINT, 0xe0a82e); box(.1, .05, .05, -.1, -.03, 0, M.TRIM, 0x6b6f75); box(.006, .18, .006, .42, -.18, 0, M.TRIM, 0x333333); box(.04, .02, .04, .42, -.2, 0, M.TRIM, 0x555555);
   box(.05, .05, .05, 0, -.01, 0, M.DARK, 0x223040);
   jibM = mkInst(finish(), MATS, 60);
@@ -1814,7 +1829,7 @@ function newGame(seed = (Math.random() * 1e9) | 0) {
     if (f > 0.55 && hash(x, z, seed) < 0.85) tree[i] = 1;
   }
   ensureHighway();
-  money = 80000; month = 0; tax = 9; dayT = 0.12; questIdx = 0; hudMilestone();
+  money = 80000; month = 0; tax = 9; dayT = 0.12; questIdx = 0; sandbox = false; undoStack.length = 0; syncUndo(); syncSandbox(); hudMilestone();
   paintGround(); refresh();
   if (ready) showToast('🛣️ Şehrin otoyola bağlı olmalı: yolunu otoyol çıkışına (⤵) bağla, göçmenler oradan gelir.', { cls: 'info', ms: 7000 });
 }
@@ -2054,6 +2069,8 @@ function rebuild() {
       continue;
     }
     if (STUBS.has(i) && x === HWY_X + 1) P(signM, X, .034, Z - .44, 1, 1, 1, 0, 0xffffff);
+    if (type[i] === T_ROAD && roadKind[i] === K_ROUND) continue;   // drawn by the roundabout ring below
+    if (svcAt[i] >= 0 && services.get(svcAt[i])?.kind === 'island') { P(roundM, X, 0, Z, 1, 1, 1, 0, overlay === 'traffic' ? rampColor(1 - dens[i] / 3) : 0xffffff); P(roundI, X, 0, Z, 1, 1, 1, 0, 0xffffff); }
     if (type[i] === T_ROAD && roadKind[i] === K_GRAVEL && !curveId[i]) {
       if (overlay === 'traffic') rampColor(1 - dens[i] / 3); else _C.setRGB(.7, .58, .44).multiplyScalar(.9 + H(4) * .12);
       P(roadM, X, 0, Z, 1, 1, 1, Math.floor(H(3) * 4) * Math.PI / 2, _C);
@@ -2155,7 +2172,7 @@ function rebuild() {
   for (const key in LOTMESH) commit(LOTMESH[key], counts.get(LOTMESH[key]) || 0);
   for (const k in PM) commit(PM[k], counts.get(PM[k]) || 0);
   commit(carLo, counts.get(carLo) || 0);
-  for (const m of [hwyM, barrierM, railM, signM, roadM, walkM, cornerM, dashM, zebraM, trackM, stainM, holeM, lampM, glowM, tlightM, treeA, treeB, rubbleM, zoneM, ovM, stopM, lineDotM, medianM]) commit(m, counts.get(m) || 0);
+  for (const m of [roundM, roundI, hwyM, barrierM, railM, signM, roadM, walkM, cornerM, dashM, zebraM, trackM, stainM, holeM, lampM, glowM, tlightM, treeA, treeB, rubbleM, zoneM, ovM, stopM, lineDotM, medianM]) commit(m, counts.get(m) || 0);
   for (const s of services.values()) s.mesh.traverse(o => { if (o.isMesh) o.material = ovOn && overlay !== 'traffic' ? grayMat : MATS; });
   roadMaskCache = null;
 }
@@ -2174,6 +2191,7 @@ function badge(icon) {
 const svcGeoCache = {}, spinners = new Set();
 function makeServiceMesh(kind) {
   const d = SVC[kind], grp = new THREE.Group();
+  if (kind === 'island' && !svcGeoCache.island) { box(.01, .001, .01, 0, 0, 0, M.TRIM, 0xffffff); svcGeoCache.island = finish(); }
   if (!svcGeoCache[kind]) { if (MK && QSVC[kind]) QSVC[kind](rng(kind.length * 7919 + kind.charCodeAt(0))); else SVCGEN[kind](); svcGeoCache[kind] = finish(); }
   const m = new THREE.Mesh(svcGeoCache[kind], MATS); m.castShadow = m.receiveShadow = true; grp.add(m);
   if (kind === 'wind') {
@@ -2374,7 +2392,7 @@ function simTick() {
   lastIncome = Math.round((stats.pop * 2.2 + stats.jC * 2 + stats.jI * (hasPolicy('industry') ? 1.95 : 1.7) + stats.jO * 2.6) * tax / 10) + tourismIncome();
   lastExpense = roadUpkeep() + busUpkeep() + policyUpkeep();
   for (const s of services.values()) lastExpense += SVC[s.kind].upkeep;
-  money += lastIncome - lastExpense;
+  money += lastIncome - lastExpense; if (sandbox) money = Math.max(money, 999999999);
   month++;
   addXp(2 + Math.floor(stats.pop / 25 * (stats.happy > 55 ? 1.25 : 1)) + Math.floor((stats.jC + stats.jI + stats.jO) / 60));
   if (month % 12 === 0) save(true);
@@ -2389,7 +2407,14 @@ function simTick() {
   checkQuests(); citizenChatter();
 }
 let checkQuestsSoon = false;
-function refresh() { checkQuestsSoon = true; validateLots(); computeConn(); computeNetworks(); computeCoverage(); computeStats(); computeDemand(); rebuild(); hud(); }
+function fixRoundabouts() {
+  for (let i = 0; i < NN; i++) if (roadKind[i] === K_ROUND) {
+    const x = i % N, z = (i / N) | 0; let ok = false;
+    for (let dz = -1; dz <= 1 && !ok; dz++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Z = z + dz; if (inb(X, Z) && svcAt[idx(X, Z)] >= 0 && services.get(svcAt[idx(X, Z)])?.kind === 'island') { ok = true; break; } }
+    if (!ok || type[i] !== T_ROAD) roadKind[i] = type[i] === T_ROAD ? K_ROAD : 0;
+  }
+}
+function refresh() { checkQuestsSoon = true; fixRoundabouts(); validateLots(); computeConn(); computeNetworks(); computeCoverage(); computeStats(); computeDemand(); rebuild(); hud(); }
 
 // ============================================================ Buses
 function roadPath(a, b) {
@@ -2691,7 +2716,7 @@ const pointers = new Map();
 
 const ms = n => `<span class="ms">${n}</span>`;
 const CAT_MS = { road: 'add_road', zone: 'domain', util: 'bolt', edu: 'school', safe: 'local_police', svc: 'account_balance', bus: 'directions_bus', mark: 'location_city', bull: 'delete', layer: 'layers' };
-const TOOL_MS = { gravel: 'landscape', road: 'add_road', curve: 'route', treeroad: 'nature', avenue: 'merge', res: 'home', com: 'storefront', ind: 'factory', off: 'apartment', dezone: 'ink_eraser',
+const TOOL_MS = { roundabout: 'roundabout_right', gravel: 'landscape', road: 'add_road', curve: 'route', treeroad: 'nature', avenue: 'merge', res: 'home', com: 'storefront', ind: 'factory', off: 'apartment', dezone: 'ink_eraser',
   busstop: 'signpost', busline: 'timeline', bulldoze: 'delete', power: 'bolt', wind: 'wind_power', solar: 'solar_power', water: 'water_drop', sewage: 'plumbing', landfill: 'delete_sweep',
   park: 'park', plaza: 'deck', policepost: 'local_police', police: 'local_police', policehq: 'shield', firepost: 'fire_extinguisher', fire: 'local_fire_department', firehq: 'fire_truck',
   kinder: 'child_care', school: 'school', highschool: 'menu_book', univ: 'account_balance', clinic: 'medical_services', hospital: 'local_hospital', cemetery: 'yard', post: 'local_post_office',
@@ -2784,6 +2809,11 @@ function selection(a, b) {
   if (!b || !tool) return [];
   if (tool === 'curve') return curveList(curveDraft || { a: a || b, b });
   if (tool === 'busline') return lineDraft.map(i => ({ i, ok: true }));
+  if (tool === 'roundabout') {
+    const fp = footprint(b, 3); if (!fp) return [];
+    const ok = fp.every(i => type[i] === T_EMPTY || (type[i] === T_ROAD && !isFixed(i) && roadKind[i] !== K_ROUND));
+    return fp.map(i => ({ i, ok }));
+  }
   if (SVC[tool]) {
     const fp = footprint(b, SVC[tool].size); if (!fp) return [];
     let ok = fp.every(i => type[i] === T_EMPTY);
@@ -2820,6 +2850,7 @@ function summarize(list) {
   if (tool === 'avenue') { const cost = aveCost(list); return { text: `🛤️ ${okN} kare · ₺${fmt(cost)}`, ok: okN > 0 && cost > 0 && cost <= money }; }
   if (tool === 'busline') { const n = list.length; return { text: n < 2 ? `🗺️ ${n} durak seçildi — en az 2 durağa dokun` : `🗺️ ${n} duraklı hat · ₺50/ay/otobüs`, ok: n >= 2 }; }
   if (TOOLDEF[tool].zone) return { text: `${TOOLDEF[tool].icon} ${okN} kare ${TOOLDEF[tool].name.toLowerCase()}`, ok: okN > 0 };
+  if (tool === 'roundabout') { const ok = list[0]?.ok; return { text: ok ? 'Göbekli Kavşak (3×3) · ₺900' : 'Buraya sığmıyor: 3×3 boş alan ya da yol gerekir', ok: ok && 900 <= money }; }
   if (SVC[tool]) { const d = SVC[tool], ok = list[0]?.ok; return { text: ok ? `${d.icon} ${d.name} · ₺${fmt(d.cost)}` : (d.nearWater ? `${d.icon} Nehir kenarındaki boş araziye kur` : '⛔ Buraya kurulamaz'), ok: ok && d.cost <= money }; }
   return { text: `${TOOLDEF[tool].icon} ${okN} kare ${tool === 'dezone' ? 'bölge silinecek' : 'yıkılacak'}`, ok: okN > 0 };
 }
@@ -2838,6 +2869,7 @@ $('aEnd').onclick = () => setTool(null);
 
 function apply(list, cell) {
   if (!list.length) return;
+  pushUndo();
   if (tool === 'curve') {
     const c = list.curve, cost = list.filter(e => type[e.i] !== T_ROAD).length * 12;
     if (list.some(e => !e.ok)) return showToast('Kavisli yol su veya hizmet binası üzerinden geçemez.');
@@ -2853,6 +2885,13 @@ function apply(list, cell) {
     let n = 0;
     for (const { i, ok } of list) { if (!ok || roadKind[i] === K_AVE) continue; if (curveId[i]) removeCurve(curveId[i]); if (type[i] !== T_ROAD) { type[i] = T_ROAD; zone[i] = 0; lvl[i] = 0; tree[i] = 0; rubble[i] = 0; extinguishSilently(i); } roadKind[i] = 2; n++; }
     money -= cost; addXp(n);
+  } else if (tool === 'roundabout') {
+    if (!list[0].ok) return showToast('Göbekli kavşak için 3×3 boş alan ya da düz yol gerekir.');
+    if (money < 900) return showToast('Yetersiz bütçe!');
+    const center = list[4].i;
+    for (const { i } of list) { if (curveId[i]) removeCurve(curveId[i]); busStops.delete(i); zone[i] = 0; lvl[i] = 0; tree[i] = 0; rubble[i] = 0; extinguishSilently(i); if (i !== center) { type[i] = T_ROAD; roadKind[i] = K_ROUND; } else { type[i] = T_EMPTY; roadKind[i] = 0; } }
+    addService('island', center % N, (center / N) | 0, nextSvc++);
+    money -= 900; addXp(15); showToast('Göbekli kavşak yapıldı: ışık beklemeden akan trafik.', { cls: 'ok' });
   } else if (tool === 'busline') {
     if (![...services.values()].some(s => s.kind === 'depot')) return showToast('Önce bir 🚌 Otobüs Garı kur.');
     const stops = lineDraft.slice(), path = linePath(stops);
@@ -2896,6 +2935,7 @@ function apply(list, cell) {
   navigator.vibrate?.(12);
   (tool === 'bulldoze' || tool === 'dezone') ? SFX.bull() : TOOLDEF[tool]?.zone ? SFX.zone() : (ROADK[tool] || tool === 'avenue' || tool === 'curve') ? SFX.road() : SFX.build();
   checkBusLines();
+  if (sandbox) money = Math.max(money, 999999999);
   refresh();
 }
 function extinguishSilently(i) { burn[i] = 0; burning.delete(i); }
@@ -2988,7 +3028,7 @@ cv.addEventListener('pointerdown', e => {
     if (lineDraft[lineDraft.length - 1] !== i) lineDraft.push(i);
     showPending(selection(null, c), c); return;
   }
-  if (SVC[tool]) { if (e.pointerType === 'mouse') apply(selection(null, c), c); else showPending(selection(null, c), c); return; }
+  if (SVC[tool] || tool === 'roundabout') { if (e.pointerType === 'mouse') apply(selection(null, c), c); else showPending(selection(null, c), c); return; }
   if (tool === 'curve' && curveDraft) { bending = true; curveDraft.ctrl = [hit.x, hit.z]; showPending(selection(null, c), c); return; }
   if (pending) cancelPending();
   dragStart = c; updatePreview();
@@ -3134,20 +3174,28 @@ $('dnBtn').onclick = () => { dayNight = !dayNight; store.set('kk.dn', dayNight ?
 syncDn();
 
 // ============================================================ Save / load
-function save(auto = false) {
-  const data = { v: 2, money, month, tax, nextSvc, dayT,
+function serialize() {
+  return { v: 2, sandbox, money, month, tax, nextSvc, dayT,
     type: Array.from(type), zone: Array.from(zone), lvl: Array.from(lvl), tree: Array.from(tree),
     services: [...services.values()].map(({ id, kind, x, z }) => ({ id, kind, x, z })),
     curves: [...curves.values()].map(({ id, p0, p1, p2, tiles, ts }) => ({ id, p0, p1, p2, tiles, ts })), nextCurve,
     lots: [...lots.values()].map(({ id, zone, lvl, W, D, dir, tiles }) => ({ id, zone, lvl, W, D, dir, tiles })), nextLot,
     questIdx, xp, policies: [...policies], roadKind: Array.from(roadKind), busStops: [...busStops], busLines: busLines.map(({ id, stops, color }) => ({ id, stops, color })), nextLine };
+}
+function save(auto = false) {
+  const data = serialize();
   const ok = store.set('kentkurucu.save', JSON.stringify(data));
   if (!auto) showToast(ok ? 'Şehir kaydedildi.' : 'Kaydedilemedi (tarayıcı depolaması kapalı).', { cls: ok ? 'ok' : '' });
 }
 function load(silent = false) {
   let d; try { d = JSON.parse(store.get('kentkurucu.save')); } catch { d = null; }
   if (!d || !d.type) { if (!silent) showToast('Kayıtlı şehir bulunamadı.'); return false; }
-  alloc();
+  restore(d); undoStack.length = 0; syncUndo();
+  if (!silent) showToast('Şehir yüklendi.', { cls: 'ok' });
+  return true;
+}
+function restore(d) {
+  alloc(); sandbox = !!d.sandbox;
   type = Uint8Array.from(d.type); zone = Uint8Array.from(d.zone); lvl = Uint8Array.from(d.lvl); tree = Uint8Array.from(d.tree);
   money = d.money; month = d.month; tax = d.tax; nextSvc = d.nextSvc; dayT = d.dayT ?? .12;
   for (const s of d.services) addService(s.kind, s.x, s.z, s.id);
@@ -3166,10 +3214,17 @@ function load(silent = false) {
   for (const k of d.policies || []) policies.add(k);
   questIdx = d.questIdx ?? 0;
   xp = 0; msLevel = 0; addXpSilent(d.xp ?? Math.round((d.month || 0) * 4));
-  paintGround(); checkBusLines(); refresh();
-  if (!silent) showToast('Şehir yüklendi.', { cls: 'ok' });
-  return true;
+  paintGround(); checkBusLines(); refresh(); syncSandbox();
 }
+// ---- undo: snapshots taken before every edit (last 10)
+const undoStack = [];
+function pushUndo() { undoStack.push(JSON.stringify(serialize())); if (undoStack.length > 10) undoStack.shift(); syncUndo(); }
+function syncUndo() { const b = $('undoBtn'); if (b) b.disabled = !undoStack.length; }
+$('undoBtn').onclick = () => { if (!undoStack.length) return; const d = JSON.parse(undoStack.pop()); const keepMonth = month; restore(d); month = Math.max(month, keepMonth); hud(); syncUndo(); SFX.click(); showToast('Son işlem geri alındı.', { cls: 'info', ms: 1500 }); };
+// ---- sandbox: unlimited money
+let sandbox = false;
+function syncSandbox() { const b = $('sbBtn'); if (b) { b.textContent = sandbox ? 'Açık' : 'Kapalı'; b.classList.toggle('on', sandbox); } if (sandbox) money = Math.max(money, 999999999); hud(); }
+$('sbBtn').onclick = () => { sandbox = !sandbox; if (!sandbox) money = Math.min(money, 80000); syncSandbox(); showToast(sandbox ? 'Sınırsız para açık: özgürce inşa et.' : 'Sınırsız para kapalı. Bütçe ₺80.000 ile devam ediyor.', { cls: 'info' }); };
 $('save').onclick = () => save();
 $('load').onclick = () => { load(); $('menu').classList.add('hidden'); };
 let newArmed = 0;
@@ -3404,6 +3459,7 @@ applyQuality();
   window.__kent = {
     get stats() { return stats; }, get money() { return money; }, get month() { return month; }, get demand() { return demand; }, get net() { return net; },
     info() { renderer.info.autoReset = false; renderer.info.reset(); if (composer) composer.render(); else renderer.render(scene, camera); const r = renderer.info.render; renderer.info.autoReset = true; let inst = 0, tris = 0; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) { inst += o.count; const g = o.geometry; tris += o.count * (g.index ? g.index.count : g.attributes.position.count) / 3; } }); const top = []; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) { const g = o.geometry, t = (g.index ? g.index.count : g.attributes.position.count) / 3; top.push([Object.keys(LOTMESH).find(k => LOTMESH[k] === o) || (o === treeA ? 'treeA' : o === treeB ? 'treeB' : '?'), o.count, Math.round(t), Math.round(t * o.count)]); } }); top.sort((a, b) => b[3] - a[3]); return { calls: r.calls, tris: r.triangles, inst, instTris: Math.round(tris), q: quality, pr: renderer.getPixelRatio(), top: top.slice(0, 12) }; },
+    dbgRound() { let n = 0; for (let i = 0; i < NN; i++) if (roadKind[i] === K_ROUND) n++; return n + " ring tiles, islands " + [...services.values()].filter(s => s.kind === "island").length + ", undo " + undoStack.length; },
     finishBuilds() { for (const l of growing) { l.g0 = -1e9; } updateGrowth(); growing.clear(); for (const l of lots.values()) delete l.g0; rebuild(); },
     get lots() { const o = {}; for (const l of lots.values()) { const k = 'RCIO'[l.zone - 1] + l.lvl + ' ' + l.W + 'x' + l.D; o[k] = (o[k] || 0) + 1; } return o; },
     get vehicles() { return vehicles.length; }, get vk() { const o = {}; for (const v of vehicles) o[v.kind] = (o[v.kind] || 0) + 1; o.arrivals = arrivals.length; o.sig = sigList.length; return o; }, get burning() { return burning.size; },
