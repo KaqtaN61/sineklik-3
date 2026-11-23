@@ -85,7 +85,27 @@
   .meter { display:inline-block; width:70px; height:7px; background:#0b0e18; border-radius:4px; vertical-align:middle; overflow:hidden; margin-left:4px; }
   .meter i { display:block; height:100%; }
 
-  #warn { position:fixed; left:calc(6px + var(--sl)); top:calc(100px + var(--st)); max-width:min(300px, calc(100vw - 80px)); padding:8px 12px; color:#e9d8a6; line-height:1.4; font-size:12.5px; z-index:3; border-left:3px solid var(--i); }
+  #left { position:fixed; left:calc(6px + var(--sl)); top:calc(100px + var(--st)); width:min(310px, calc(100vw - 70px)); display:flex; flex-direction:column; gap:6px; z-index:3; pointer-events:none; }
+  #left > * { pointer-events:auto; }
+  #warn { padding:8px 12px; color:#e9d8a6; line-height:1.4; font-size:12.5px; border-left:3px solid var(--i); }
+  #quest { padding:8px 12px; border-left:3px solid var(--acc); cursor:pointer; line-height:1.35; }
+  #quest .qh { font-size:11px; color:var(--acc); letter-spacing:.6px; text-transform:uppercase; font-weight:600; display:flex; justify-content:space-between; gap:8px; }
+  #quest .qt { font-size:13.5px; font-weight:600; margin-top:2px; }
+  #quest .qd { font-size:12px; color:var(--muted); margin-top:3px; }
+  #quest .qp { height:3px; background:rgba(255,255,255,.08); border-radius:2px; margin-top:6px; overflow:hidden; } #quest .qp i { display:block; height:100%; background:var(--acc); }
+  #quest.done { border-left-color:var(--r); }
+  #post { padding:8px 12px; font-size:12.5px; line-height:1.4; border-left:3px solid #8a7fd6; animation:pin .3s ease-out; }
+  #post b { font-size:12px; } #post .h { color:var(--muted); font-size:11px; }
+  @keyframes pin { from { opacity:0; transform:translateX(-12px); } to { opacity:1; transform:none; } }
+  #feedBtn { position:relative; }
+  #feedBtn .n { position:absolute; top:-5px; right:-5px; min-width:17px; height:17px; padding:0 4px; border-radius:9px; background:#8a7fd6; color:#fff; font-size:10.5px; line-height:17px; font-weight:700; }
+  .fpost { padding:9px 0; border-bottom:1px solid var(--line); font-size:13.5px; line-height:1.45; }
+  .fpost .h { color:var(--muted); font-size:12px; }
+  #floats { position:fixed; inset:0; pointer-events:none; z-index:4; overflow:hidden; }
+  .float { position:absolute; transform:translate(-50%, -50%); font-weight:700; font-size:13px; color:#bff0b0; text-shadow:0 1px 3px rgba(0,0,0,.8); animation:floatUp 1.6s ease-out forwards; white-space:nowrap; }
+  .float.money { color:#ffe08a; } .float.bad { color:#ffb0a8; }
+  @keyframes floatUp { from { opacity:0; margin-top:0; } 15% { opacity:1; } to { opacity:0; margin-top:-46px; } }
+  @media (prefers-reduced-motion: reduce) { .float, #post { animation:none; } }
   #toast { position:fixed; top:calc(100px + var(--st)); left:50%; transform:translateX(-50%); padding:10px 14px; border-radius:12px; z-index:20;
     background:rgba(20,24,30,.94); border-left:3px solid var(--bad); color:#fff; opacity:0; transition:opacity .25s; pointer-events:none; text-align:center; max-width:calc(100vw - 24px); display:flex; gap:10px; align-items:center; }
   #toast.ok { border-left-color:var(--r); }
@@ -105,7 +125,7 @@
   .muted { color:var(--muted); font-size:13px; }
   table { width:100%; border-collapse:collapse; font-size:13px; } td { padding:2px 0; } td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
 
-  @media (min-width:900px) { #warn { top:calc(64px + var(--st)); } #toast { top:calc(64px + var(--st)); } }
+  @media (min-width:900px) { #left { top:calc(64px + var(--st)); } #toast { top:calc(64px + var(--st)); } }
   @media (max-width:420px) { .chip { padding:4px 7px; min-height:36px; } .chip b { font-size:13.5px; } #ctl button { width:36px; height:32px; } }
 </style>
 <script type="importmap">
@@ -144,7 +164,7 @@
   </div>
   <button class="chip panel" id="msChip" style="flex-direction:column;align-items:stretch;gap:3px;padding:5px 9px"><b id="msName" style="font-size:13px">🏆 Köy</b><span class="meter" style="width:84px;margin:0"><i id="msBar" style="width:0%;background:#fbbf24"></i></span></button>
   <div id="ctl" class="panel">
-    <button data-speed="0"><span class="ms">pause</span></button><button data-speed="1"><span class="ms">play_arrow</span></button><button data-speed="2"><span class="ms">fast_forward</span></button><button id="menuBtn"><span class="ms">menu</span></button>
+    <button data-speed="0"><span class="ms">pause</span></button><button data-speed="1"><span class="ms">play_arrow</span></button><button data-speed="2"><span class="ms">fast_forward</span></button><button id="feedBtn" title="Kent akışı"><span class="ms">forum</span><span class="n hidden" id="feedN">0</span></button><button id="menuBtn"><span class="ms">menu</span></button>
   </div>
 </div>
 
@@ -154,7 +174,8 @@
   <button id="home" title="Merkeze dön"><span class="ms">center_focus_strong</span></button>
 </div>
 
-<div id="warn" class="panel hidden"></div>
+<div id="left"><div id="quest" class="panel hidden"></div><div id="warn" class="panel hidden"></div><div id="post" class="panel hidden"></div></div>
+<div id="floats"></div>
 <div id="toast"></div>
 
 <div id="bottom">
@@ -188,6 +209,15 @@
   </div>
 </div>
 
+<div id="feed" class="modal hidden">
+  <div class="panel">
+    <h2>Kent Akışı</h2>
+    <p class="muted">Vatandaşların şehir hakkında yazdıkları. Sorunları ilk buradan duyarsın.</p>
+    <div id="feedList"></div>
+    <button class="big" id="feedClose">Kapat</button>
+  </div>
+</div>
+
 <div id="menu" class="modal hidden">
   <div class="panel">
     <h2>☰ Menü</h2>
@@ -197,6 +227,7 @@
     <div id="policyList" class="muted"></div>
     <div class="row"><b>Grafik</b><button data-q="0">Düşük</button><button data-q="1">Orta</button><button data-q="2">Yüksek</button></div>
     <div class="row"><b>Gece/gündüz</b><button id="dnBtn">Açık</button></div>
+    <div class="row"><b>Ses</b><button id="sndBtn">Açık</button></div>
     <div class="row"><button id="save">💾 Kaydet</button><button id="load">📂 Yükle</button><button id="new">🆕 Yeni şehir</button></div>
     <div class="row"><button id="fs">⛶ Tam ekran</button><button id="help">❔ Nasıl oynanır</button></div>
     <p class="muted">Binalar: Quaternius Downtown City MegaKit (quaternius.com, CC0) · Dokular: Poly Haven (polyhaven.com, CC0) · Araçlar: Kenney Car Kit (kenney.nl, CC0) · İkonlar: Material Symbols (Google, Apache 2.0)</p>
@@ -1499,7 +1530,7 @@ const LOCAR = [0xe8e8e6, 0xf2f2f2, 0x2a2d31, 0x18263d, 0x8b8f94, 0x2b2b2b, 0xb9b
 const CIV = ['sedan', 'sedan-sports', 'hatchback-sports', 'suv', 'suv-luxury', 'taxi', 'van'], TRUCKS = ['delivery', 'truck', 'garbage-truck'], SPECIAL = ['police', 'ambulance', 'firetruck'];
 const CAR_SCALE = .11, CAR_FLIP = 0, CAR_TINT = [0xffffff, 0xffffff, 0xffffff, 0xf2d6d6, 0xd8e4f5, 0xdedede, 0x9a9a9a, 0xe8f0d8];
 let CARS = null, CARTEX = null;
-let carLo, hwyM, barrierM, railM, signM, sigM, sig = new Uint8Array(4096), sigList = [], roadM, walkM, cornerM, dashM, zebraM, lampM, tlightM, treeA, treeB, pedM, stainM, trackM, holeM, stopM, lineDotM, medianM, snowPts, rubbleM, zoneM, ovM, prevM, beaconM, flameM, smokeM, glowM;
+let craneM, jibM, carLo, hwyM, barrierM, railM, signM, sigM, sig = new Uint8Array(4096), sigList = [], roadM, walkM, cornerM, dashM, zebraM, lampM, tlightM, treeA, treeB, pedM, stainM, trackM, holeM, stopM, lineDotM, medianM, snowPts, rubbleM, zoneM, ovM, prevM, beaconM, flameM, smokeM, glowM;
 const glowMat = new THREE.MeshBasicMaterial({ color: 0xffd39a, transparent: true, opacity: 0, toneMapped: false, depthWrite: false });
 
 function wearTex(kind) {
@@ -1610,6 +1641,13 @@ function buildMeshes() {
   box(.118, .036, .27, 0, .012, 0, M.PAINT, 0xffffff); box(.104, .036, .15, 0, .048, -.012, M.DARK, 0x1c232b); box(.1, .006, .13, 0, .084, -.012, M.PAINT, 0xffffff);
   for (const x of [-.055, .055]) for (const z of [-.085, .085]) { const g = new THREE.CylinderGeometry(.022, .022, .014, 8); g.rotateZ(Math.PI / 2); g.translate(x, .022, z); addPart(g, M.DARK, 0x111111); }
   carLo = mkInst(finish(), MATS, 2400);
+  // tower crane for buildings under construction
+  for (let k = 0; k < 10; k++) { box(.03, .1, .03, 0, k * .1, 0, M.PAINT, 0xe0a82e); box(.034, .004, .034, 0, k * .1 + .05, 0, M.TRIM, 0x8a6a1e); }
+  box(.06, .04, .06, 0, 0, 0, M.TRIM, 0x6b6f75);
+  craneM = mkInst(finish(), MATS, 60);
+  box(.62, .022, .03, .18, 0, 0, M.PAINT, 0xe0a82e); box(.1, .05, .05, -.1, -.03, 0, M.TRIM, 0x6b6f75); box(.006, .18, .006, .42, -.18, 0, M.TRIM, 0x333333); box(.04, .02, .04, .42, -.2, 0, M.TRIM, 0x555555);
+  box(.05, .05, .05, 0, -.01, 0, M.DARK, 0x223040);
+  jibM = mkInst(finish(), MATS, 60);
   box(.16, .005, .06, 0, .1, 0, M.TRIM, 0x5b6168); box(.16, .07, .004, 0, .03, -.028, M.DARK, 0x9fc2d6); box(.004, .07, .06, -.08, .03, 0, M.TRIM, 0x5b6168); box(.004, .07, .06, .08, .03, 0, M.TRIM, 0x5b6168);
   box(.12, .012, .03, 0, .045, -.012, M.TRIM, 0x6d4c33); box(.012, .12, .012, .1, .03, .02, M.PAINT, 0x1e6fd9); box(.04, .04, .006, .1, .13, .02, M.PAINT, 0x1e6fd9);
   stopM = mkInst(finish(), MATS, 600);
@@ -1756,7 +1794,7 @@ function newGame(seed = (Math.random() * 1e9) | 0) {
     if (f > 0.55 && hash(x, z, seed) < 0.85) tree[i] = 1;
   }
   ensureHighway();
-  money = 80000; month = 0; tax = 9; dayT = 0.12; hudMilestone();
+  money = 80000; month = 0; tax = 9; dayT = 0.12; questIdx = 0; hudMilestone();
   paintGround(); refresh();
   if (ready) showToast('🛣️ Şehrin otoyola bağlı olmalı: yolunu otoyol çıkışına (⤵) bağla, göçmenler oradan gelir.', { cls: 'info', ms: 7000 });
 }
@@ -1854,10 +1892,16 @@ function lotTiles(fx, fz, d, a0, W, D) {
   return out;   // first W entries are the street-front row
 }
 const lotFree = (i, zt) => zone[i] === zt && type[i] === T_EMPTY && !lotId[i] && !rubble[i];
-function makeLot(zt, tiles, W, D, d, L = 1) {
+const growing = new Set();
+const easeG = t => 1 - Math.pow(1 - t, 3);
+function growth(lot) { if (lot.g0 == null) return 1; const t = clamp((time - lot.g0) / lot.gd, 0, 1); return t; }
+function startGrowth(lot, dur) { lot.g0 = time; lot.gd = dur; growing.add(lot); }
+function makeLot(zt, tiles, W, D, d, L = 1, anim = false) {
   const id = nextLot++, lot = { id, zone: zt, lvl: L, W, D, dir: d, rot: DIRS[d][2], tiles, anchor: tiles[0], v: Math.floor(hash(tiles[0] % N, (tiles[0] / N) | 0, 17) * 97) };
   let cx = 0, cz = 0; for (const t of tiles) { cx += wx(t % N); cz += wx((t / N) | 0); lotId[t] = id; lvl[t] = L; tree[t] = 0; crime[t] = 0; }
-  lot.cx = cx / tiles.length; lot.cz = cz / tiles.length; lots.set(id, lot); return lot;
+  lot.cx = cx / tiles.length; lot.cz = cz / tiles.length; lots.set(id, lot);
+  if (anim) startGrowth(lot, 3.5 + tiles.length * .5);
+  return lot;
 }
 function tryLot(zt, i, d) {
   const x = i % N, z = (i / N) | 0, sizes = LOT_SIZES[zt].map(s => [s, Math.random() * s[2]]).sort((a, b) => b[1] - a[1]).map(e => e[0]);
@@ -1865,11 +1909,11 @@ function tryLot(zt, i, d) {
     const tiles = lotTiles(x, z, d, a0, W, D); if (!tiles || !tiles.every(t => lotFree(t, zt))) continue;
     const [dx, dz] = DIRS[d];
     if (!tiles.slice(0, W).every(t => { const X = t % N + dx, Z = ((t / N) | 0) + dz; return inb(X, Z) && connCity[idx(X, Z)]; })) continue;
-    return makeLot(zt, tiles, W, D, d);
+    return makeLot(zt, tiles, W, D, d, 1, true);
   }
   return null;
 }
-function setLotLvl(lot, L) { if (L <= 0) return dropLot(lot); lot.lvl = L; for (const t of lot.tiles) lvl[t] = L; }
+function setLotLvl(lot, L) { if (L <= 0) return dropLot(lot); const up = L > lot.lvl; lot.lvl = L; for (const t of lot.tiles) lvl[t] = L; if (up) startGrowth(lot, 3); }
 function dropLot(lot, rub = 0) { for (const t of lot.tiles) { if (lotId[t] === lot.id) lotId[t] = 0; lvl[t] = 0; burn[t] = 0; burning.delete(t); if (rub) rubble[t] = rub; } lots.delete(lot.id); }
 function validateLots() {   // any edit that touches a parcel (road, rezoning, bulldozer) clears the whole building
   for (const lot of [...lots.values()]) if (lot.tiles.some(t => lotId[t] !== lot.id || type[t] !== T_EMPTY || zone[t] !== lot.zone || lvl[t] !== lot.lvl)) dropLot(lot);
@@ -2059,7 +2103,10 @@ function rebuild() {
       for (let a = 0; a < lot.W; a++) bldList.push(lot.tiles[a]);
       if (ovOn && overlay !== 'traffic') { const v = ovValue(i); v === null ? _C.set(0x9a9ea8) : rampColor(v); }
       else { _C.setScalar(.95 + H(6) * .05); if (served[i] !== 3 && (served[i] & 3) !== 3) _C.lerp(GRAY, .55); if (burn[i]) _C.lerp(BLACK, .55); }
-      P(mesh, lot.cx, 0, lot.cz, 1, 1, 1, rot, _C);
+      const ii = inc(mesh), gr = growth(lot);
+      put(mesh, ii, lot.cx, 0, lot.cz, 1, gr < 1 ? Math.max(.02, easeG(gr)) : 1, 1, rot, _C);
+      lot.ix = { mesh, ii, col: _C.getHex() };
+      if (gr < 1) continue;
       (mesh.geometry.userData.park || []).forEach(([px, pz, pr], k) => { if (H(200 + k) < .32) { const [ox, oz] = rotXZ(px, pz, rot); parkCar(lot.cx + ox, lot.cz + oz, rot + pr + (H(300 + k) < .5 ? 0 : Math.PI), H(400 + k)); } });
       continue;
     }
@@ -2253,6 +2300,7 @@ function addXp(n) {
     money += m.reward;
     if (msLevel === POLICY_MS) news.push('🏛️ Politikalar');
     showToast(`🎉 ${m.name}! +₺${fmt(m.reward)}${news.length ? ' · Açıldı: ' + news.join(', ') : ''}`, { cls: 'ok', ms: 6000 });
+    SFX.big(); feedPost('belediye', `Şehrimiz artık bir ${m.name}! Yeni binaların kilidi açıldı.`, true);
     if (openCat) { const c = CATS.find(c => c.id === openCat); if (c) openSub(c); }
   }
   hudMilestone();
@@ -2317,8 +2365,11 @@ function simTick() {
     }
   }
   rebuild(); hud(); if (cardCell) showInfo(cardCell);
+  if (lastIncome - lastExpense > 0) SFX.coin();
+  checkQuests(); citizenChatter();
 }
-function refresh() { validateLots(); computeConn(); computeNetworks(); computeCoverage(); computeStats(); computeDemand(); rebuild(); hud(); }
+let checkQuestsSoon = false;
+function refresh() { checkQuestsSoon = true; validateLots(); computeConn(); computeNetworks(); computeCoverage(); computeStats(); computeDemand(); rebuild(); hud(); }
 
 // ============================================================ Buses
 function roadPath(a, b) {
@@ -2356,7 +2407,7 @@ function checkBusLines() {
 // ============================================================ Fires
 const burning = new Set();
 function startFire(i) {
-  burn[i] = 1; burning.add(i);
+  burn[i] = 1; burning.add(i); SFX.siren();
   const x = i % N, z = (i / N) | 0;
   const truck = cov.fire[i] > 0 && dispatchTruck(i);
   showToast(truck ? '🔥 Yangın! İtfaiye yolda.' : '🔥 Yangın çıktı! Bölgede itfaiye yok.', { cls: truck ? 'info' : '', action: { label: '📍 Göster', fn: () => focusOn(x, z) } });
@@ -2561,6 +2612,7 @@ function drawFires(time) {
       put(smokeM, ns++, x + Math.sin(p * 5 + k) * .2, h + .2 + p * 2.4, z + Math.cos(p * 4 + k) * .2, s, s, s, 0, _C.setRGB(.22 + p * .3, .22 + p * .3, .24 + p * .3));
     }
   }
+  for (const lot of growing) { const t = growth(lot); if (t >= 1 || !lot.ix) continue; for (let k = 0; k < 2; k++) { const p = (time * .4 + k * .5 + lot.id * .13) % 1, s = .2 + p * .45; put(smokeM, ns++, lot.cx + Math.sin(p * 4 + k + lot.id) * .3 * lot.W, .03 + p * .25, lot.cz + Math.cos(p * 3 + k) * .3 * lot.D, s, s * .6, s, 0, _C.setRGB(.55 + p * .2, .5 + p * .2, .44 + p * .2)); } }
   for (const v of vehicles) if (v.spray != null) {
     const [, , P2] = curve(v), tx = wx(v.target % N), tz = wx((v.target / N) | 0);
     for (let k = 0; k < 6; k++) { const f = (time * 2 + k / 6) % 1; put(smokeM, ns++, P2[0] + (tx - P2[0]) * f, .2 + Math.sin(f * Math.PI) * .4, P2[1] + (tz - P2[1]) * f, .2, .2, .2, 0, 0x9fd3ff); }
@@ -2667,6 +2719,7 @@ function syncBar() {
   }
 }
 function setTool(t) {
+  if (t !== tool) SFX.click();
   tool = t; dragStart = null; cancelPending(); hideCard();
   const panMode = !t;
   controls.mouseButtons.LEFT = panMode ? THREE.MOUSE.PAN : null;
@@ -2820,6 +2873,7 @@ function apply(list, cell) {
     }
   }
   navigator.vibrate?.(12);
+  (tool === 'bulldoze' || tool === 'dezone') ? SFX.bull() : TOOLDEF[tool]?.zone ? SFX.zone() : (ROADK[tool] || tool === 'avenue' || tool === 'curve') ? SFX.road() : SFX.build();
   checkBusLines();
   refresh();
 }
@@ -3023,14 +3077,15 @@ function hud() {
     if (stats.unserved) w.push(`${stats.unserved} bina elektrik/su alamıyor.`);
     if (msLevel >= 1 && stats.noGarbage > 3) w.push(net.gCap ? `🗑️ ${stats.noGarbage} binanın çöpü toplanmıyor.` : '🗑️ Çöp sahası yok: binalar gelişemiyor.');
     if (msLevel >= 4 && stats.noSewage > 3) w.push(net.sCap ? `🚿 ${stats.noSewage} bina atık suya bağlı değil.` : '🚿 Atık su tesisi yok: binalar 3. seviyeye çıkamıyor.');
-    if (stats.pop > 300 && !hasSvc('police')) w.push('👮 Suç artıyor: polis karakolu kur.');
-    if (stats.pop > 300 && !hasSvc('fire')) w.push('🚒 Yangın riski: itfaiye kur.');
-    if (stats.pop > 600 && !hasSvc('school')) w.push('🏫 Okul yok: binalar gelişemiyor.');
-    if (stats.pop > 600 && !hasSvc('hospital')) w.push('🏥 Hastane yok: mutluluk düşük.');
+    if (stats.pop > 300 && !hasCov('police')) w.push('Suç artıyor: Güvenlik menüsünden polis kur.');
+    if (stats.pop > 300 && !hasCov('fire')) w.push('Yangın riski: Güvenlik menüsünden itfaiye kur.');
+    if (stats.pop > 600 && !hasCov('school')) w.push('Okul yok: binalar gelişemiyor.');
+    if (stats.pop > 600 && !hasCov('health')) w.push('Sağlık hizmeti yok: mutluluk düşük.');
   }
   if (money < 0) w.push('Bütçe ekside! Vergiyi artır.');
   $('warn').innerHTML = w.slice(0, 3).map(s => '⚠ ' + s).join('<br>');
   $('warn').classList.toggle('hidden', !w.length || !!tool);
+  renderQuest();
   let up = 0; for (const s of services.values()) up += SVC[s.kind].upkeep;
   const tour = tourismIncome();
   $('budget').innerHTML = `<table><tr><td>Vergi geliri</td><td class="pos">+₺${fmt(lastIncome - tour)}</td></tr>${tour ? `<tr><td>Turizm</td><td class="pos">+₺${fmt(tour)}</td></tr>` : ''}<tr><td>Hizmet bakımı</td><td class="neg">−₺${fmt(up)}</td></tr><tr><td>Yol bakımı</td><td class="neg">−₺${fmt(roadUpkeep())}</td></tr><tr><td>Otobüsler</td><td class="neg">−₺${fmt(busUpkeep())}</td></tr><tr><td>Politikalar</td><td class="neg">−₺${fmt(policyUpkeep())}</td></tr></table>`;
@@ -3050,6 +3105,9 @@ $('menu').onclick = e => { if (e.target.id === 'menu') $('menu').classList.add('
 $('help').onclick = () => { $('menu').classList.add('hidden'); $('hint').classList.remove('hidden'); };
 $('fs').onclick = () => { const d = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : d.requestFullscreen?.())?.catch?.(() => {}); };
 document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { quality = +b.dataset.q; store.set('kk.q', quality); applyQuality(); rebuild(); });
+function syncSnd() { $('sndBtn').textContent = AU.on ? 'Açık' : 'Kapalı'; $('sndBtn').classList.toggle('on', AU.on); }
+$('sndBtn').onclick = () => { AU.on = !AU.on; store.set('kk.snd', AU.on ? '1' : '0'); if (AU.on) auInit(); if (AU.amb) AU.amb.gain.value = 0; syncSnd(); };
+setTimeout(syncSnd, 0);
 function syncDn() { $('dnBtn').textContent = dayNight ? 'Açık' : 'Kapalı'; $('dnBtn').classList.toggle('on', dayNight); }
 $('dnBtn').onclick = () => { dayNight = !dayNight; store.set('kk.dn', dayNight ? '1' : '0'); syncDn(); };
 syncDn();
@@ -3061,7 +3119,7 @@ function save(auto = false) {
     services: [...services.values()].map(({ id, kind, x, z }) => ({ id, kind, x, z })),
     curves: [...curves.values()].map(({ id, p0, p1, p2, tiles, ts }) => ({ id, p0, p1, p2, tiles, ts })), nextCurve,
     lots: [...lots.values()].map(({ id, zone, lvl, W, D, dir, tiles }) => ({ id, zone, lvl, W, D, dir, tiles })), nextLot,
-    xp, policies: [...policies], roadKind: Array.from(roadKind), busStops: [...busStops], busLines: busLines.map(({ id, stops, color }) => ({ id, stops, color })), nextLine };
+    questIdx, xp, policies: [...policies], roadKind: Array.from(roadKind), busStops: [...busStops], busLines: busLines.map(({ id, stops, color }) => ({ id, stops, color })), nextLine };
   const ok = store.set('kentkurucu.save', JSON.stringify(data));
   if (!auto) showToast(ok ? 'Şehir kaydedildi.' : 'Kaydedilemedi (tarayıcı depolaması kapalı).', { cls: ok ? 'ok' : '' });
 }
@@ -3085,6 +3143,7 @@ function load(silent = false) {
   for (const L of d.busLines || []) busLines.push({ ...L, path: null, buses: 0, ok: false });
   nextLine = d.nextLine || busLines.length + 1;
   for (const k of d.policies || []) policies.add(k);
+  questIdx = d.questIdx ?? 0;
   xp = 0; msLevel = 0; addXpSilent(d.xp ?? Math.round((d.month || 0) * 4));
   paintGround(); checkBusLines(); refresh();
   if (!silent) showToast('Şehir yüklendi.', { cls: 'ok' });
@@ -3116,9 +3175,176 @@ function frame() {
   const t = controls.target, cx = clamp(t.x, -HALF, HALF), cz = clamp(t.z, -HALF, HALF);
   if (cx !== t.x || cz !== t.z) { _d.set(cx - t.x, 0, cz - t.z); t.add(_d); camera.position.add(_d); }
   if (speed > 0) { acc += dt * SPEEDS[speed]; if (acc >= TICK) { acc -= TICK; simTick(); } }
-  updateVehicles(dt); drawVehicles(time); drawFires(time); updateDay(dt);
+  updateVehicles(dt); drawVehicles(time); drawFires(time); updateGrowth(); updateDay(dt);
+  if (checkQuestsSoon) { checkQuestsSoon = false; checkQuests(); }
   if (overlay === 'traffic') { ovAcc += dt; if (ovAcc > .5) { ovAcc = 0; rebuild(); } }
   if (composer) composer.render(); else renderer.render(scene, camera);
+}
+
+function updateGrowth() {
+  let nc = 0;
+  for (const lot of growing) {
+    if (!lots.has(lot.id) || !lot.ix) { if (!lots.has(lot.id)) growing.delete(lot); continue; }
+    const t = growth(lot), { mesh, ii, col } = lot.ix;
+    put(mesh, ii, lot.cx, 0, lot.cz, 1, t < 1 ? Math.max(.02, easeG(t)) : 1, 1, lot.rot, col); mesh.instanceMatrix.needsUpdate = true;
+    if (t >= 1) {
+      growing.delete(lot); delete lot.g0; SFX.done();
+      if (lot.zone === Z_R) floatAt(lot.cx, lot.cz, `+${RES[lot.lvl] * lot.tiles.length} sakin`);
+      else floatAt(lot.cx, lot.cz, `+${(lot.zone === Z_C ? COMJ : lot.zone === Z_O ? OFFJ : INDJ)[lot.lvl] * lot.tiles.length} iş`);
+      rebuild(); break;
+    }
+    const h = Math.min(mesh.geometry.userData.h || .5, 3) * easeG(t) + .25, [ox, oz] = rotXZ(lot.W / 2 - .12, -lot.D / 2 + .15, lot.rot);
+    put(craneM, nc, lot.cx + ox, 0, lot.cz + oz, 1, h + .2, 1, 0, 0xffffff); put(jibM, nc, lot.cx + ox, h + .2, lot.cz + oz, 1, 1, 1, time * .35 + lot.id, 0xffffff); nc++;
+  }
+  commit(craneM, nc); commit(jibM, nc);
+}
+// ---- floating labels over the map (new residents, jobs)
+const _fv = new THREE.Vector3();
+function floatAt(x, z, text, cls = '') {
+  _fv.set(x, .4, z).project(camera); if (_fv.z > 1 || Math.abs(_fv.x) > 1 || Math.abs(_fv.y) > 1) return;
+  const el = document.createElement('div'); el.className = 'float ' + cls; el.textContent = text;
+  el.style.left = ((_fv.x + 1) / 2 * innerWidth) + 'px'; el.style.top = ((1 - _fv.y) / 2 * innerHeight) + 'px';
+  $('floats').append(el); setTimeout(() => el.remove(), 1700);
+}
+
+// ============================================================ Sound (synthesised, no files)
+const AU = { ctx: null, on: store.get('kk.snd') !== '0', out: null, amb: null, last: {} };
+function auInit() {
+  if (AU.ctx || !AU.on) return;
+  try { AU.ctx = new (window.AudioContext || window.webkitAudioContext)(); AU.out = AU.ctx.createGain(); AU.out.gain.value = .55; AU.out.connect(AU.ctx.destination); startAmbience(); } catch (e) { AU.ctx = null; }
+}
+addEventListener('pointerdown', () => { auInit(); AU.ctx?.state === 'suspended' && AU.ctx.resume(); }, true);
+function tone(f, dur, type = 'sine', vol = .15, slide = 0, delay = 0) {
+  const c = AU.ctx; if (!c || !AU.on) return; const t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + dur);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .008); g.gain.exponentialRampToValueAtTime(.0008, t + dur);
+  o.connect(g).connect(AU.out); o.start(t); o.stop(t + dur + .02);
+}
+let noiseBuf = null;
+function noise(dur, vol, freq, ftype = 'lowpass', delay = 0, q = 1) {
+  const c = AU.ctx; if (!c || !AU.on) return; const t = c.currentTime + delay;
+  if (!noiseBuf) { noiseBuf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate); const d = noiseBuf.getChannelData(0); for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1; }
+  const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(); src.buffer = noiseBuf; f.type = ftype; f.frequency.value = freq; f.Q.value = q;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0008, t + dur); src.connect(f).connect(g).connect(AU.out); src.start(t, Math.random()); src.stop(t + dur + .05);
+}
+const thr = (k, s) => { const n = performance.now(); if (n - (AU.last[k] || 0) < s * 1000) return false; AU.last[k] = n; return true; };
+const SFX = {
+  click() { if (thr('c', .05)) tone(1400, .035, 'triangle', .05); },
+  build() { noise(.22, .3, 500); tone(150, .2, 'sine', .25, -70); tone(880, .08, 'triangle', .05, 0, .05); },
+  road() { noise(.3, .18, 900, 'bandpass', 0, .7); tone(120, .15, 'sine', .15, -40); },
+  done() { if (thr('d', .35)) { tone(784, .1, 'sine', .07); tone(1175, .16, 'sine', .06, 0, .08); } },
+  coin() { if (thr('m', 1)) { tone(1568, .07, 'square', .03); tone(2093, .12, 'square', .025, 0, .06); } },
+  bull() { noise(.5, .35, 700, 'bandpass', 0, .8); noise(.3, .25, 200, 'lowpass', .1); tone(80, .35, 'sawtooth', .1, -30); },
+  zone() { tone(520, .06, 'sine', .06); tone(660, .07, 'sine', .05, 0, .05); },
+  goal() { [523, 659, 784, 1046].forEach((f, i) => tone(f, .32, 'triangle', .09, 0, i * .1)); },
+  big() { [392, 523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, .5, 'triangle', .1, 0, i * .11)); },
+  err() { tone(220, .12, 'square', .05); tone(165, .18, 'square', .05, 0, .1); },
+  siren() { if (thr('s', 4)) for (let k = 0; k < 4; k++) tone(k % 2 ? 960 : 720, .28, 'sine', .04, 0, k * .28); },
+  post() { if (thr('p', 2)) tone(1046, .06, 'sine', .04); },
+};
+function startAmbience() {   // soft city hum, passing cars and birds, louder when zoomed in
+  const c = AU.ctx, src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  const b = c.createBuffer(1, c.sampleRate * 3, c.sampleRate), d = b.getChannelData(0); let last = 0; for (let k = 0; k < d.length; k++) { last = (last + .02 * (Math.random() * 2 - 1)) / 1.02; d[k] = last * 3.5; }
+  src.buffer = b; src.loop = true; f.type = 'lowpass'; f.frequency.value = 420; g.gain.value = 0; src.connect(f).connect(g).connect(AU.out); src.start(); AU.amb = g;
+  setInterval(() => {
+    if (!AU.on || !AU.ctx || !type) return;
+    const dist = camera.position.distanceTo(controls.target), near = clamp(1.4 - dist / 30, .15, 1), busy = Math.min(1, (stats.pop + 50) / 1500);
+    AU.amb.gain.setTargetAtTime(.10 * near * (.4 + busy) * (speed ? 1 : .5), AU.ctx.currentTime, .5);
+    if (speed && Math.random() < .25 * busy * near) { const fq = 300 + Math.random() * 500; noise(1.2, .05 * near, fq, 'bandpass', 0, 2); }
+    const k = clamp(_sunDir.y * 3.2 + .25, 0, 1);
+    if (speed && k > .6 && Math.random() < .2 * (1 - busy * .7) * near) { const f0 = 2400 + Math.random() * 1600; for (let j = 0; j < 3; j++) tone(f0 + j * 120, .06, 'sine', .02, 400, j * .09); }
+  }, 900);
+}
+
+// ============================================================ Goals (guided progression with rewards)
+const hasCov = c => [...services.values()].some(s => SVC[s.kind].cov === c && svcRoads(s).length);
+const hasKind = k => [...services.values()].some(s => s.kind === k);
+const zoneCount = z => { let n = 0; for (let i = 0; i < NN; i++) if (zone[i] === z) n++; return n; };
+const linkedRoads = () => { let n = 0; for (let i = 0; i < NN; i++) if (connCity[i] && !STUBS.has(i)) n++; return n; };
+const QUESTS = [
+  { t: 'Şehri otoyola bağla', d: 'Yol menüsünden Düz Yol seç ve yeşil tabelalı otoyol çıkışından şehre doğru bir yol çiz.', ok: () => linkedRoads() >= 4, p: () => linkedRoads() / 4, reward: 3000 },
+  { t: 'Elektrik santrali kur', d: 'Altyapı menüsünden Kömür Santrali seç ve yola bitişik kur.', ok: () => net.pCap > 0, reward: 2000 },
+  { t: 'Su kulesi kur', d: 'Su kulesini nehir kıyısına, yola bağlı kur.', ok: () => net.wCap > 0, reward: 2000 },
+  { t: 'Konut bölgesi çiz', d: 'Bölge > Konut. Yolun iki yanına sürükle; evler yola bakan parsellere kurulur.', ok: () => zoneCount(Z_R) >= 8, p: () => zoneCount(Z_R) / 8, reward: 2000 },
+  { t: 'İlk sakinler', d: 'Göçmenler otoyoldan taşınma kamyonlarıyla gelir. 50 nüfusa ulaş.', ok: () => stats.pop >= 50, p: () => stats.pop / 50, reward: 3000 },
+  { t: 'Sanayi bölgesi çiz', d: 'Sakinlerin iş bulsun. Sanayiyi evlerden biraz uzağa koy, kirlilik yapar.', ok: () => zoneCount(Z_I) >= 8, p: () => zoneCount(Z_I) / 8, reward: 3000 },
+  { t: 'Ticari bölge çiz', d: 'Dükkânlar ana yolların kenarında daha iyi iş yapar.', ok: () => zoneCount(Z_C) >= 4, p: () => zoneCount(Z_C) / 4, reward: 3000 },
+  { t: 'Bir park yap', d: 'Parklar arazi değerini ve mutluluğu artırır.', ok: () => hasKind('park') || hasKind('plaza'), reward: 2000 },
+  { t: '150 nüfus', d: 'Talep çubuklarına bak: yeşil konut talebi varsa konut ekle.', ok: () => stats.pop >= 150, p: () => stats.pop / 150, reward: 5000 },
+  { t: 'Güvenliği sağla', d: 'Güvenlik menüsünden bir Polis Noktası ve bir İtfaiye Noktası kur.', ok: () => hasCov('police') && hasCov('fire'), p: () => (hasCov('police') + hasCov('fire')) / 2, reward: 6000 },
+  { t: 'Çöp toplama', d: 'Binaların 2. seviyeye çıkması için Çöp Sahası gerekli.', ok: () => net.gCap > 0, reward: 4000 },
+  { t: 'Eğitim ve sağlık', d: 'Bir okul (Anaokulu ya da İlkokul) ve bir Sağlık Ocağı kur.', ok: () => hasCov('school') && hasCov('health'), p: () => (hasCov('school') + hasCov('health')) / 2, reward: 8000 },
+  { t: '400 nüfus', d: 'Mahalleler büyüdükçe ağaçlı yollar ve parklar arazi değerini yükseltir.', ok: () => stats.pop >= 400, p: () => stats.pop / 400, reward: 8000 },
+  { t: 'Toplu taşıma', d: 'Ulaşım menüsünden Otobüs Garı kur, durak koy ve bir hat çiz.', ok: () => busLines.some(L => L.ok), reward: 8000 },
+  { t: 'Mutlu şehir', d: '300+ nüfusta ortalama mutluluğu %60\'ın üstüne çıkar.', ok: () => stats.pop >= 300 && stats.happy >= 60, p: () => stats.pop >= 300 ? stats.happy / 60 : stats.pop / 300, reward: 10000 },
+  { t: '1.000 nüfus', d: 'Ofis bölgeleri ve yüksek yoğunluk için atık su ve okul kapsaması gerekir.', ok: () => stats.pop >= 1000, p: () => stats.pop / 1000, reward: 15000 },
+  { t: 'Bir anıt kur', d: 'Anıtlar turist çeker ve çevresini değerli yapar.', ok: () => [...services.values()].some(s => SVC[s.kind].unique), reward: 20000 },
+  { t: '2.500 nüfus', d: 'Trafiği izle: Katman > Trafik. Geniş cadde ve otobüs hatları sıkışıklığı çözer.', ok: () => stats.pop >= 2500, p: () => stats.pop / 2500, reward: 30000 },
+  { t: '5.000 nüfus', d: 'Büyükşehir olma yolunda.', ok: () => stats.pop >= 5000, p: () => stats.pop / 5000, reward: 50000 },
+  { t: '10.000 nüfus', d: 'Metropol! Bütün anıtları kurmayı dene.', ok: () => stats.pop >= 10000, p: () => stats.pop / 10000, reward: 100000 },
+];
+let questIdx = 0, questOpen = true;
+function checkQuests() {
+  if (!type || questIdx >= QUESTS.length) return renderQuest();
+  const q = QUESTS[questIdx];
+  if (q.ok()) {
+    questIdx++; money += q.reward; addXp(20 + questIdx * 5); SFX.goal();
+    showToast(`Görev tamamlandı: ${q.t} · +₺${fmt(q.reward)}`, { cls: 'ok', ms: 4000 });
+    feedPost('belediye', `"${q.t}" hedefine ulaşıldı. Şehrimiz büyüyor!`, true);
+    hud();
+  }
+  renderQuest();
+}
+function renderQuest() {
+  const el = $('quest');
+  if (questIdx >= QUESTS.length) { el.className = 'panel done'; el.innerHTML = '<div class="qh"><span>Görevler</span><span>Tamam</span></div><div class="qt">Bütün görevler bitti. Şehir senin!</div>'; return; }
+  const q = QUESTS[questIdx], pr = clamp(q.p ? q.p() : 0, 0, 1);
+  el.className = 'panel';
+  el.innerHTML = `<div class="qh"><span>Görev ${questIdx + 1}/${QUESTS.length}</span><span>₺${fmt(q.reward)}</span></div><div class="qt">${q.t}</div>${questOpen ? `<div class="qd">${q.d}</div>` : ''}${q.p ? `<div class="qp"><i style="width:${Math.round(pr * 100)}%"></i></div>` : ''}`;
+  el.classList.toggle('hidden', !!tool && !questOpen);
+}
+$('quest').onclick = () => { questOpen = !questOpen; renderQuest(); };
+
+// ============================================================ Kent Akışı (citizens' social feed)
+const FIRST = ['Ayşe', 'Mehmet', 'Zeynep', 'Mustafa', 'Elif', 'Ahmet', 'Fatma', 'Emre', 'Selin', 'Burak', 'Deniz', 'Can', 'Ece', 'Hakan', 'Merve', 'Oğuz', 'Seda', 'Kerem', 'Gizem', 'Barış', 'Esra', 'Murat', 'Derya', 'Tolga'];
+const LAST = ['Yılmaz', 'Kaya', 'Demir', 'Şahin', 'Çelik', 'Yıldız', 'Aydın', 'Öztürk', 'Arslan', 'Doğan', 'Kılıç', 'Koç', 'Kurt', 'Özdemir', 'Polat', 'Erdem'];
+const feed = []; let feedUnread = 0;
+function feedPost(who, text, pin = false) {
+  const name = who === 'belediye' ? 'Belediye Başkanlığı' : `${pick(Math.random, FIRST)} ${pick(Math.random, LAST)}`;
+  const handle = who === 'belediye' ? '@belediye' : '@' + name.toLocaleLowerCase('tr-TR').replace(/[^a-zçğıöşü]/g, '').slice(0, 12) + ((Math.random() * 90) | 0);
+  feed.unshift({ name, handle, text, m: month }); if (feed.length > 60) feed.pop();
+  feedUnread++; $('feedN').textContent = feedUnread; $('feedN').classList.remove('hidden');
+  if (pin || Math.random() < .5) { const el = $('post'); el.innerHTML = `<b>${name}</b> <span class="h">${handle}</span><div>${text}</div>`; el.classList.remove('hidden'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; clearTimeout(feedPost.t); feedPost.t = setTimeout(() => el.classList.add('hidden'), 6000); SFX.post(); }
+}
+$('feedBtn').onclick = () => { feedUnread = 0; $('feedN').classList.add('hidden'); $('feedList').innerHTML = feed.length ? feed.map(p => `<div class="fpost"><b>${p.name}</b> <span class="h">${p.handle} · ${MONTHS[p.m % 12]} ${Math.floor(p.m / 12) + 1}</span><div>${p.text}</div></div>`).join('') : '<p class="muted">Henüz kimse bir şey yazmadı. Şehir büyüdükçe vatandaşlar konuşmaya başlar.</p>'; $('feed').classList.remove('hidden'); };
+$('feedClose').onclick = () => $('feed').classList.add('hidden');
+$('feed').onclick = e => { if (e.target.id === 'feed') $('feed').classList.add('hidden'); };
+function citizenChatter() {   // one message every few months, chosen from what is actually happening
+  if (!stats.pop || Math.random() > .16) return;
+  const opts = [], avgDens = (() => { let s = 0, n = 0; for (let i = 0; i < NN; i++) if (type[i] === T_ROAD && roadKind[i] !== K_HWY) { s += dens[i]; n++; } return n ? s / n : 0; })();
+  const season = SEASON_OF[month % 12];
+  if (avgDens > .9) opts.push('Trafik yine kilit. İşe yürüyerek gitsem daha hızlı varırdım.', 'Bu kavşakta 20 dakika bekledim. Belediye bir çözüm bulsun!');
+  if (stats.unserved > 2) opts.push('Yine elektrik/su kesildi. Ne zaman düzelecek?', 'Musluktan su akmıyor, santral yetmiyor herhalde.');
+  if (stats.noGarbage > 5) opts.push('Çöpler günlerdir toplanmıyor, sokak kokuyor.');
+  if (stats.noSewage > 5 && msLevel >= 4) opts.push('Kanalizasyon taşıyor. Atık su tesisi şart.');
+  if (stats.happy > 68) opts.push('Bu şehirde yaşamak gerçekten güzel.', 'Mahallemiz çok huzurlu, iyi ki taşınmışız.', 'Akşam yürüyüşü yaptım, sokaklar tertemiz.');
+  if (stats.happy < 40) opts.push('Bu şehirden taşınmayı düşünüyorum.', 'Vergiler yüksek, hizmet yok. Böyle olmaz.');
+  if (tax >= 12) opts.push('Vergiler çok yüksek, maaş yetmiyor.');
+  if (tax <= 6) opts.push('Vergiler düşük, belediyeye teşekkürler!');
+  if (stats.pop > 300 && !hasCov('police')) opts.push('Mahallede hırsızlık arttı. Polis nerede?');
+  if (stats.pop > 300 && !hasCov('fire')) opts.push('Yangın çıksa itfaiye nereden gelecek?');
+  if (stats.pop > 400 && !hasCov('school')) opts.push('Çocuğumu gönderecek okul yok.');
+  if (stats.pop > 400 && !hasCov('health')) opts.push('Doktora gitmek için şehir dışına çıkıyoruz.');
+  if (burning.size) opts.push('Karşı binada yangın var! Herkes dışarı çıktı.');
+  if (busLines.some(L => L.ok)) opts.push('Otobüsle işe gitmek çok rahat, arabayı sattım.');
+  if (hasKind('park')) opts.push('Parkta piknik yaptık, çocuklar bayıldı.');
+  if (stats.jI > stats.pop * .5) opts.push('Fabrika dumanından camı açamıyoruz.');
+  if (season === 0) opts.push('Kar yağıyor, şehir bembeyaz oldu.', 'Yollar buz tuttu, dikkatli sürün.');
+  if (season === 2) opts.push('Sıcaktan bunaldık, nehir kenarı tıklım tıklım.');
+  if (season === 1) opts.push('Ağaçlar çiçek açmış, bahar geldi.');
+  if (season === 3) opts.push('Yapraklar sararmış, sonbahar çok güzel.');
+  opts.push('Yeni evimize taşındık, manzara harika.', 'Yeni açılan dükkândan alışveriş yaptım.', 'Otoyoldan gelirken şehrin silüeti çok güzel görünüyordu.');
+  feedPost('', pick(Math.random, opts));
 }
 
 async function loadAssets() {
