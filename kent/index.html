@@ -2689,27 +2689,35 @@ function drawVehicles(time) {
   }
   commit(sigM, ns);
 }
+// Soft particles (camera-facing points): flames, smoke, construction dust and water spray
+const PS = {};
+function particleTex(inner, outer) { const c = canvas(64), g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, inner); gr.addColorStop(.45, outer); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+function makePS(name, max, size, tex, additive, opacity = 1) {
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(max * 3), 3)); g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(max * 3), 3)); g.setDrawRange(0, 0);
+  const m = new THREE.PointsMaterial({ size, map: tex, vertexColors: true, transparent: true, opacity, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, sizeAttenuation: true, fog: true });
+  const pts = new THREE.Points(g, m); pts.frustumCulled = false; scene.add(pts); PS[name] = { pts, n: 0, max };
+}
+function pAdd(name, x, y, z, r, g, b) { const P = PS[name]; if (!P || P.n >= P.max) return; const k = P.n++ * 3, pa = P.pts.geometry.attributes.position.array, ca = P.pts.geometry.attributes.color.array; pa[k] = x; pa[k + 1] = y; pa[k + 2] = z; ca[k] = r; ca[k + 1] = g; ca[k + 2] = b; }
+function pCommit() { for (const k in PS) { const P = PS[k], g = P.pts.geometry; g.setDrawRange(0, P.n); g.attributes.position.needsUpdate = g.attributes.color.needsUpdate = true; P.n = 0; } }
 function drawFires(time) {
-  let nf = 0, ns = 0;
+  if (!PS.fire) { makePS('fire', 600, 1.6, particleTex('rgba(255,240,200,1)', 'rgba(255,120,20,.55)'), true); makePS('smoke', 500, 4.5, particleTex('rgba(70,70,74,.75)', 'rgba(60,60,64,.35)'), false, .7); makePS('dust', 500, 1.2, particleTex('rgba(200,190,170,.7)', 'rgba(190,180,160,.3)'), false, .65); }
   for (const i of burning) {
     if (!lvl[i]) continue;
     const lot = lotAt(i); if (!lot) continue;
-    const x = lot.cx, z = lot.cz, h = Math.min(lotMesh(lot).geometry.userData.h || .6, 3);
-    for (let k = 0; k < 5; k++) {
-      const a = k * 1.7 + i, s = .8 + .35 * Math.sin(time * 9 + k * 2 + i);
-      put(flameM, nf++, x + Math.cos(a) * .2, h * (.25 + .18 * k), z + Math.sin(a) * .2, s, s * (1 + .3 * Math.sin(time * 13 + k)), s, 0, k % 2 ? 0xff7a1a : 0xffc533);
+    const x = lot.cx, z = lot.cz, h = Math.min(lotMesh(lot).geometry.userData.h || .6, 3), w = .25 * Math.max(lot.W, lot.D);
+    for (let k = 0; k < 22; k++) {   // flames lick up the facade and over the roof
+      const p = (time * 1.6 + k * .137 + i * .01) % 1, a = k * 2.4 + i, rr = w * (.4 + .6 * ((k * 37) % 10) / 10);
+      const fl = 1 - p, y = h * ((k % 7) / 7) * .9 + p * .5;
+      pAdd('fire', x + Math.cos(a) * rr + Math.sin(time * 7 + k) * .04, y, z + Math.sin(a) * rr, 1, .55 + .35 * fl, .15 * fl);
     }
-    for (let k = 0; k < 5; k++) {
-      const p = (time * .3 + k / 5) % 1, s = .6 + p * 1.8;
-      put(smokeM, ns++, x + Math.sin(p * 5 + k) * .2, h + .2 + p * 2.4, z + Math.cos(p * 4 + k) * .2, s, s, s, 0, _C.setRGB(.22 + p * .3, .22 + p * .3, .24 + p * .3));
-    }
+    for (let k = 0; k < 14; k++) { const p = (time * .22 + k / 14) % 1, d = .1 + p * .8; pAdd('smoke', x + Math.sin(p * 5 + k) * d, h + .2 + p * 3.2, z + Math.cos(p * 4 + k) * d, .3 + p * .35, .3 + p * .35, .32 + p * .35); }
   }
-  for (const lot of growing) { const t = growth(lot); if (t >= 1 || !lot.ix) continue; for (let k = 0; k < 2; k++) { const p = (time * .4 + k * .5 + lot.id * .13) % 1, s = .2 + p * .45; put(smokeM, ns++, lot.cx + Math.sin(p * 4 + k + lot.id) * .3 * lot.W, .03 + p * .25, lot.cz + Math.cos(p * 3 + k) * .3 * lot.D, s, s * .6, s, 0, _C.setRGB(.55 + p * .2, .5 + p * .2, .44 + p * .2)); } }
+  for (const lot of growing) { const t = growth(lot); if (t >= 1 || !lot.ix) continue; for (let k = 0; k < 6; k++) { const p = (time * .5 + k / 6 + lot.id * .13) % 1; pAdd('dust', lot.cx + Math.sin(p * 4 + k + lot.id) * .35 * lot.W, .05 + p * .35, lot.cz + Math.cos(p * 3 + k) * .35 * lot.D, .78, .74, .66); } }
   for (const v of vehicles) if (v.spray != null) {
     const [, , P2] = curve(v), tx = wx(v.target % N), tz = wx((v.target / N) | 0);
-    for (let k = 0; k < 6; k++) { const f = (time * 2 + k / 6) % 1; put(smokeM, ns++, P2[0] + (tx - P2[0]) * f, .2 + Math.sin(f * Math.PI) * .4, P2[1] + (tz - P2[1]) * f, .2, .2, .2, 0, 0x9fd3ff); }
+    for (let k = 0; k < 10; k++) { const f = (time * 2 + k / 10) % 1; pAdd('dust', P2[0] + (tx - P2[0]) * f, .2 + Math.sin(f * Math.PI) * .45, P2[1] + (tz - P2[1]) * f, .75, .88, 1); }
   }
-  commit(flameM, nf); commit(smokeM, ns);
+  pCommit(); commit(flameM, 0); commit(smokeM, 0);
 }
 
 // ============================================================ Day / night
@@ -3197,7 +3205,8 @@ function hud() {
   $('happy').textContent = stats.pop ? '%' + Math.round(stats.happy) : '—';
   $('happy').className = !stats.pop ? '' : stats.happy < 40 ? 'neg' : stats.happy > 65 ? 'pos' : '';
   $('date').textContent = `${MONTHS[month % 12]} ${Math.floor(month / 12) + 1}`;
-  $('wIc').textContent = SEASON_OF[month % 12] === 0 && weather === 0 ? 'ac_unit' : WEATHER_MS[weather]; $('wIc').parentElement.title = WEATHER_NAME[weather];
+  const night = _sunDir.y < -.02;
+  $('wIc').textContent = weather === 0 ? (night ? 'dark_mode' : SEASON_OF[month % 12] === 0 ? 'ac_unit' : 'sunny') : weather === 1 && night ? 'nights_stay' : WEATHER_MS[weather]; $('wIc').parentElement.title = WEATHER_NAME[weather];
   setBar($('dR'), demand.r); setBar($('dC'), demand.c); setBar($('dI'), demand.i); setBar($('dO'), demand.o);
   hudMilestone();
   $('taxv').textContent = '%' + tax;
@@ -3554,6 +3563,7 @@ applyQuality();
     info() { renderer.info.autoReset = false; renderer.info.reset(); if (composer) composer.render(); else renderer.render(scene, camera); const r = renderer.info.render; renderer.info.autoReset = true; let inst = 0, tris = 0; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) { inst += o.count; const g = o.geometry; tris += o.count * (g.index ? g.index.count : g.attributes.position.count) / 3; } }); const top = []; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) { const g = o.geometry, t = (g.index ? g.index.count : g.attributes.position.count) / 3; top.push([Object.keys(LOTMESH).find(k => LOTMESH[k] === o) || (o === treeA ? 'treeA' : o === treeB ? 'treeB' : '?'), o.count, Math.round(t), Math.round(t * o.count)]); } }); top.sort((a, b) => b[3] - a[3]); return { calls: r.calls, tris: r.triangles, inst, instTris: Math.round(tris), q: quality, pr: renderer.getPixelRatio(), top: top.slice(0, 12) }; },
     dbgRound() { let n = 0; for (let i = 0; i < NN; i++) if (roadKind[i] === K_ROUND) n++; return n + " ring tiles, islands " + [...services.values()].filter(s => s.kind === "island").length + ", undo " + undoStack.length; },
     setWeather(w) { weather = w; CLOUD = w ? (w === 1 ? .55 : .9) : 0; WET = w >= 2 ? 1 : 0; hud(); },
+    fireSome() { const l = [...lots.values()].find(l => l.lvl >= 2) || [...lots.values()][0]; startFire(l.anchor); const x = l.anchor % N, z = (l.anchor / N) | 0; this.lookAt(x, z, 5, 4); return [x, z]; },
     finishBuilds() { for (const l of growing) { l.g0 = -1e9; } updateGrowth(); growing.clear(); for (const l of lots.values()) delete l.g0; rebuild(); },
     get lots() { const o = {}; for (const l of lots.values()) { const k = 'RCIO'[l.zone - 1] + l.lvl + ' ' + l.W + 'x' + l.D; o[k] = (o[k] || 0) + 1; } return o; },
     get vehicles() { return vehicles.length; }, get vk() { const o = {}; for (const v of vehicles) o[v.kind] = (o[v.kind] || 0) + 1; o.arrivals = arrivals.length; o.sig = sigList.length; return o; }, get burning() { return burning.size; },
