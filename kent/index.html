@@ -483,7 +483,14 @@ function makeFacade(kind, wall, seed) {
   return { map: texFrom(cm), normalMap: texFrom(cn, false), orm: texFrom(co, false), em: texFrom(ce) };
 }
 
-const M = { TRIM: 0, BRICK: 1, BEIGE: 2, PLASTER: 3, GREY: 4, STONE: 5, GLASS: 6, SHOP: 7, IND: 8, INDBRICK: 9, RCLAY: 10, RGREY: 11, RGRAVEL: 12, RMETAL: 13, PAINT: 14, LAWN: 15, PAVE: 16, DARK: 17, LEAF: 18, FOLIAGE: 19 };
+const M = { TRIM: 0, BRICK: 1, BEIGE: 2, PLASTER: 3, GREY: 4, STONE: 5, GLASS: 6, SHOP: 7, IND: 8, INDBRICK: 9, RCLAY: 10, RGREY: 11, RGRAVEL: 12, RMETAL: 13, PAINT: 14, LAWN: 15, PAVE: 16, DARK: 17, LEAF: 18, FOLIAGE: 19,
+  Q_BRICK: 20, Q_PALE: 21, Q_TRIM: 22, Q_TDARK: 23, Q_TGREEN: 24, Q_METAL: 25, Q_GLASS: 26, Q_INT: 27, Q_IWALL: 28, Q_ASPH: 29, Q_SLATE: 30, Q_CONC: 31, Q_ORN: 32, Q_DIRT: 33, Q_FAC: 34 };
+// Quaternius Downtown City MegaKit (CC0) material names → our material slots
+const MK_MAT = { MI_RedBrick: 'Q_BRICK', MI_RedBrick_Pale: 'Q_PALE', MI_Trim: 'Q_TRIM', MI_Trim_Dark: 'Q_TDARK', MI_Trim_Green: 'Q_TGREEN', MI_Trim_MetalConcrete: 'Q_METAL', MI_Glass: 'Q_GLASS',
+  MI_FakeInterior: 'Q_INT', MI_InteriorWall: 'Q_IWALL', MI_Asphalt: 'Q_ASPH', MI_Roof_Slate: 'Q_SLATE', MI_Concrete: 'Q_CONC', MI_Ornaments: 'Q_ORN', MI_Dirt: 'Q_DIRT' };
+const MKTEX = ['T_RedBrick_BaseColor', 'T_RedBrick_Normal', 'T_Trim_BaseColor', 'T_Trim_Normal', 'T_MetalConcrete_BaseColor', 'T_MetalConcrete_Normal', 'T_RoofSlate_BaseColor',
+  'T_Concrete_Asphalt_BaseColor', 'T_Concrete_BaseColor', 'T_Ornaments_BaseColor', 'T_Dirt_BaseColor'];
+let MK = null; const MKIMG = {};
 const FACADES = new Set([M.BRICK, M.BEIGE, M.PLASTER, M.GREY, M.STONE, M.GLASS, M.SHOP, M.IND, M.INDBRICK]);
 const MATS = [];
 const emissiveMats = [];
@@ -548,7 +555,30 @@ function buildMaterials() {
   MATS[M.PAVE] = photo('pavers');
   MATS[M.DARK] = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .12, metalness: .7 });
   MATS[M.LEAF] = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, normalMap: texFrom(IMG.forest.nor, false), normalScale: new THREE.Vector2(1.2, 1.2) });
-  MATS.forEach((m, k) => { if (k !== M.LAWN && k !== M.PAVE) addGroundAO(m); });
+  // real modelled building parts (Quaternius MegaKit): textures come with their own UVs
+  const mk = (base, nor, opts = {}) => { const t = base instanceof HTMLCanvasElement ? texFrom(base) : texFrom(MKIMG[base]); t.anisotropy = ANISO; const m = new THREE.MeshStandardMaterial({ vertexColors: true, map: t, roughness: .85, ...opts }); if (nor) { m.normalMap = texFrom(MKIMG[nor], false); m.normalScale = new THREE.Vector2(.8, .8); } return m; };
+  const pale = canvas(512), pg = pale.getContext('2d'); pg.drawImage(MKIMG.T_RedBrick_BaseColor, 0, 0, 512, 512);
+  { const d = pg.getImageData(0, 0, 512, 512), a = d.data; for (let k = 0; k < a.length; k += 4) { const l = a[k] * .3 + a[k + 1] * .59 + a[k + 2] * .11; a[k] = Math.min(255, l * 1.15 + 95); a[k + 1] = Math.min(255, l * 1.1 + 85); a[k + 2] = Math.min(255, l * 1.0 + 70); } pg.putImageData(d, 0, 0); }
+  MATS[M.Q_BRICK] = mk('T_RedBrick_BaseColor', 'T_RedBrick_Normal');
+  MATS[M.Q_PALE] = mk(pale, 'T_RedBrick_Normal');
+  MATS[M.Q_TRIM] = mk('T_Trim_BaseColor', 'T_Trim_Normal');
+  MATS[M.Q_TDARK] = mk('T_Trim_BaseColor', 'T_Trim_Normal', { color: 0x4a4a4a, roughness: .6 });
+  MATS[M.Q_TGREEN] = mk('T_Trim_BaseColor', 'T_Trim_Normal', { color: 0x6f8f78 });
+  MATS[M.Q_METAL] = mk('T_MetalConcrete_BaseColor', 'T_MetalConcrete_Normal', { roughness: .7, metalness: .2 });
+  MATS[M.Q_GLASS] = new THREE.MeshStandardMaterial({ vertexColors: true, color: 0x1a2128, roughness: .06, metalness: .85, transparent: true, opacity: .62, depthWrite: false });
+  MATS[M.Q_INT] = new THREE.MeshStandardMaterial({ vertexColors: true, color: 0x6b6258, roughness: .9, emissive: 0xffd9a0, emissiveIntensity: 0 }); emissiveMats.push(MATS[M.Q_INT]);
+  MATS[M.Q_IWALL] = mk('T_RedBrick_BaseColor', null, { color: 0x9a8f86 });
+  MATS[M.Q_ASPH] = mk('T_Concrete_Asphalt_BaseColor', null, { roughness: .95 });
+  MATS[M.Q_SLATE] = mk('T_RoofSlate_BaseColor', null, { roughness: .8 });
+  MATS[M.Q_CONC] = mk('T_Concrete_BaseColor', null);
+  MATS[M.Q_ORN] = mk('T_Ornaments_BaseColor', null);
+  MATS[M.Q_DIRT] = mk('T_Dirt_BaseColor', null);
+  MATS[M.Q_GLASS] = new THREE.MeshStandardMaterial({ vertexColors: true, color: 0x151b21, roughness: .08, metalness: .8, emissive: 0xffd9a0, emissiveIntensity: 0 }); emissiveMats.push(MATS[M.Q_GLASS]);
+  FAC = bakeFacades();
+  MATS[M.Q_FAC] = new THREE.MeshStandardMaterial({ vertexColors: true, map: texFrom(FAC.col), normalMap: texFrom(FAC.nor, false), roughnessMap: texFrom(FAC.orm, false), metalnessMap: texFrom(FAC.orm, false), roughness: 1, metalness: 1, emissiveMap: texFrom(FAC.emi), emissive: 0xffffff, emissiveIntensity: 0 });
+  for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap']) { const t = MATS[M.Q_FAC][k]; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = ANISO; }
+  emissiveMats.push(MATS[M.Q_FAC]);
+  MATS.forEach((m, k) => { if (k !== M.LAWN && k !== M.PAVE && k !== M.Q_GLASS) addGroundAO(m); });
   MATS[M.FOLIAGE] = new THREE.MeshStandardMaterial({ vertexColors: true, map: leafTexture(), alphaTest: .45, side: THREE.DoubleSide, roughness: .85 });
 }
 
@@ -570,7 +600,7 @@ function worldUV(g, k) {   // planar projection chosen per face normal, in world
     else uv.setXY(i, p.getX(i) * k, p.getY(i) * k);
   }
 }
-const TEXK = { [M.FOLIAGE]: -1, [M.RCLAY]: 4, [M.RGREY]: 4, [M.RGRAVEL]: 2.5, [M.RMETAL]: 3, [M.LAWN]: 1.6, [M.PAVE]: 4, [M.TRIM]: 1, [M.PAINT]: 1, [M.DARK]: 1, [M.LEAF]: 3 };
+const TEXK = { [M.Q_FAC]: -1, [M.FOLIAGE]: -1, [M.Q_BRICK]: -1, [M.Q_PALE]: -1, [M.Q_TRIM]: -1, [M.Q_TDARK]: -1, [M.Q_TGREEN]: -1, [M.Q_METAL]: -1, [M.Q_GLASS]: -1, [M.Q_INT]: -1, [M.Q_IWALL]: -1, [M.Q_ASPH]: -1, [M.Q_SLATE]: -1, [M.Q_CONC]: -1, [M.Q_ORN]: -1, [M.Q_DIRT]: -1, [M.RCLAY]: 4, [M.RGREY]: 4, [M.RGRAVEL]: 2.5, [M.RMETAL]: 3, [M.LAWN]: 1.6, [M.PAVE]: 4, [M.TRIM]: 1, [M.PAINT]: 1, [M.DARK]: 1, [M.LEAF]: 3 };
 function addPart(g, mat, col) {
   g = colorize(g, col);
   if (!FACADES.has(mat) && TEXK[mat] !== -1) worldUV(g, TEXK[mat] ?? 1);
@@ -877,6 +907,140 @@ GEN.O3 = r => {
 };
 const VARIANTS = { R1: 10, R2: 12, R3: 10, C1: 6, C2: 5, C3: 5, I1: 5, I2: 4, I3: 4, O1: 4, O2: 4, O3: 4 };
 
+// ============================================================ Modular buildings from real models
+// Pieces are in metres, facing +z, 2 m (or 4 m) wide and 3 m (one storey) tall. 1 game unit = 16 m.
+const MKGEO = {};
+function mkParts(name) {
+  if (MKGEO[name]) return MKGEO[name];
+  const dec = (str, T) => { const bin = atob(str), u8 = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) u8[k] = bin.charCodeAt(k); return new T(u8.buffer); };
+  return MKGEO[name] = MK[name].filter(pt => pt.m !== 'MI_InteriorWall' && pt.m !== 'MI_FakeInterior').map(pt => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(Float32Array.from(dec(pt.p, Int16Array), v => v / 100), 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(Float32Array.from(dec(pt.n, Int8Array), v => v / 127), 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(Float32Array.from(dec(pt.u, Int16Array), v => v / 2048), 2));
+    g.setIndex(new THREE.BufferAttribute(dec(pt.i, Uint16Array), 1));
+    const slot = MK_MAT[pt.m] || 'Q_TRIM';
+    return slot === 'Q_TDARK' ? [g, M.Q_TRIM, 0x4a4a4a] : slot === 'Q_TGREEN' ? [g, M.Q_TRIM, 0x6f8f78] : [g, M[slot], 0];
+  });
+}
+const MU = 1 / 16;   // metres → game units
+function qp(name, x, y, z, rot = 0, sx = 1, sy = 1, sz = 1, tint = 0xffffff) {   // place one piece (metres)
+  for (const [g0, mat, fixed] of mkParts(name)) {
+    const g = g0.clone(); if (sx !== 1 || sy !== 1 || sz !== 1) g.scale(sx, sy, sz);
+    g.rotateY(rot); g.translate(x, y, z); g.scale(MU, MU, MU);
+    addPart(g, mat, fixed || (mat === M.Q_BRICK || mat === M.Q_PALE ? tint : 0xffffff));
+  }
+}
+// Baked facade modules: each wall piece is rendered once (colour, normals, depth) into an atlas, then drawn as a flat 2-triangle quad.
+const FAC_PIECES = ['Brick_Plain_3', 'Brick_Window_Square_Single', 'Brick_Window_Trim_Single', 'Brick_TopTrim', 'Brick_BottomTrim', 'Brick_Inset_Window', 'Brick_RedWhite_DoubleWindow',
+  'Metal_Window', 'Metal_FirstFloor_Window', 'Metal_FirstFloor_Wall', 'Metal_FullWindow', 'Metal_Window_Half', 'Metal_Plain_3', 'Trim_FirstFloor_Window_001', 'Trim_FirstFloor_Wall', 'Trim_Window', 'Trim_Plain_3'];
+const ATL = {}; let FAC = null;
+function bakeFacades() {
+  const PX = 64, AW = 1024, AH = 1024, rowH = 3 * PX;
+  const col = canvas(AW, AH), nor = canvas(AW, AH), orm = canvas(AW, AH), emi = canvas(AW, AH);
+  const cg = col.getContext('2d'), ng = nor.getContext('2d'), og = orm.getContext('2d'), eg = emi.getContext('2d');
+  ng.fillStyle = 'rgb(128,128,255)'; ng.fillRect(0, 0, AW, AH); og.fillStyle = 'rgb(255,220,0)'; og.fillRect(0, 0, AW, AH); eg.fillStyle = '#000'; eg.fillRect(0, 0, AW, AH);
+  const scn = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1.5, -1.5, .01, 10);
+  const normMat = new THREE.MeshNormalMaterial(), depthMat = new THREE.ShaderMaterial({ vertexShader: 'varying float vz; void main(){ vz = position.z; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }', fragmentShader: 'varying float vz; void main(){ gl_FragColor = vec4(vec3(clamp((vz + .3) / .34, 0., 1.)), 1.); }' });
+  const glassMask = new THREE.MeshBasicMaterial({ color: 0xffffff }), blackMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const linToSrgb = v => v <= .0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - .055;
+  const prevRT = renderer.getRenderTarget(), prevTM = renderer.toneMapping; renderer.toneMapping = THREE.NoToneMapping;
+  let cx = 0, cy = 0;
+  for (const name of FAC_PIECES) {
+    const parts = mkParts(name), wM = Math.round(MK[name].reduce((m, pt) => m, 0) || 0) || (name.match(/Inset_Window|DoubleWindow|^Metal_Window$/) ? 4 : 2), w = wM * PX;
+    if (cx + w > AW) { cx = 0; cy += rowH; }
+    const rt = new THREE.WebGLRenderTarget(w, rowH);
+    cam.left = -wM / 2; cam.right = wM / 2; cam.updateProjectionMatrix(); cam.position.set(0, 1.5, 5); cam.lookAt(0, 1.5, 0);
+    const meshes = parts.map(([g, mat, tint]) => { const m = new THREE.Mesh(g, mat); m.userData.mat = mat; m.userData.tint = tint; scn.add(m); return m; });
+    const grab = (ctx, conv) => { renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 1); renderer.clear(); renderer.render(scn, cam); const px = new Uint8Array(w * rowH * 4); renderer.readRenderTargetPixels(rt, 0, 0, w, rowH, px); const img = ctx.createImageData(w, rowH); for (let y = 0; y < rowH; y++) for (let x = 0; x < w; x++) { const s0 = ((rowH - 1 - y) * w + x) * 4, d = (y * w + x) * 4; conv(px, s0, img.data, d); } return img; };
+    // colour (albedo, no lighting)
+    const basic = meshes.map(m => { const src = MATS[m.userData.mat]; const b = new THREE.MeshBasicMaterial({ map: src.map || null, color: src.color.clone() }); if (m.userData.tint) b.color.multiply(new THREE.Color(m.userData.tint)); m.material = b; return b; });
+    const imgC = grab(cg, (a, s0, b, d) => { b[d] = linToSrgb(a[s0] / 255) * 255; b[d + 1] = linToSrgb(a[s0 + 1] / 255) * 255; b[d + 2] = linToSrgb(a[s0 + 2] / 255) * 255; b[d + 3] = 255; });
+    meshes.forEach(m => m.material = depthMat); const imgD = grab(cg, (a, s0, b, d) => { b[d] = a[s0]; b[d + 3] = 255; });
+    for (let k = 0; k < imgC.data.length; k += 4) { const ao = .5 + .5 * Math.pow(imgD.data[k] / 255, .8); imgC.data[k] *= ao; imgC.data[k + 1] *= ao; imgC.data[k + 2] *= ao; }
+    cg.putImageData(imgC, cx, cy);
+    meshes.forEach(m => m.material = normMat); ng.putImageData(grab(ng, (a, s0, b, d) => { b[d] = a[s0]; b[d + 1] = a[s0 + 1]; b[d + 2] = a[s0 + 2]; b[d + 3] = 255; }), cx, cy);
+    meshes.forEach(m => m.material = m.userData.mat === M.Q_GLASS ? glassMask : blackMat);
+    const imgG = grab(eg, (a, s0, b, d) => { b[d] = b[d + 1] = b[d + 2] = a[s0]; b[d + 3] = 255; });
+    const imgO = og.createImageData(w, rowH); for (let k = 0; k < imgG.data.length; k += 4) { const gl = imgG.data[k] / 255; imgO.data[k] = 255; imgO.data[k + 1] = 220 - gl * 190; imgO.data[k + 2] = gl * 200; imgO.data[k + 3] = 255; }
+    og.putImageData(imgO, cx, cy);
+    const seed = cx * 7 + cy; for (let k = 0; k < imgG.data.length; k += 4) { const on = hash(seed, (k / 4 / 90) | 0, 3) < .55; imgG.data[k] *= on ? .9 : .05; imgG.data[k + 1] *= on ? .75 : .05; imgG.data[k + 2] *= on ? .5 : .05; }
+    eg.putImageData(imgG, cx, cy);
+    ATL[name] = { u0: cx / AW, u1: (cx + w) / AW, v0: 1 - (cy + rowH) / AH, v1: 1 - cy / AH, w: wM };
+    meshes.forEach(m => scn.remove(m)); basic.forEach(b => b.dispose()); rt.dispose();
+    cx += w;
+  }
+  renderer.setRenderTarget(prevRT); renderer.toneMapping = prevTM;
+  return { col, nor, orm, emi };
+}
+function qf(name, x, y, z, rot, tint = 0xffffff) {   // baked facade quad (metres)
+  const a = ATL[name]; if (!a) return qp(name, x, y, z, rot, 1, 1, 1, tint);
+  const g = new THREE.PlaneGeometry(a.w, 3); g.translate(0, 1.5, .01);
+  const uv = g.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) ? a.u1 : a.u0, uv.getY(k) ? a.v1 : a.v0);
+  g.rotateY(rot); g.translate(x, y, z); g.scale(MU, MU, MU);
+  addPart(g, M.Q_FAC, tint);
+}
+const QSTYLE = {
+  brick: { win: ['Brick_Window_Square_Single', 'Brick_Window_Trim_Single'], plain: 'Brick_Plain_3', top: 'Brick_TopTrim', col: 'Trim_Column_Center', cor: 'Cornice_Brick_Center' },
+  pale:  { win: ['Brick_Window_Square_Single'], wide: 'Brick_Inset_Window', plain: 'Brick_Plain_3', col: 'Trim_Column_Center', cor: 'Cornice_Trim_Center', mansard: true },
+  stone: { win: ['Trim_Window'], plain: 'Trim_Plain_3', col: 'Trim_Column_Center', cor: 'Cornice_Trim_Center', mansard: true },
+  loft:  { win: ['Metal_FullWindow', 'Metal_Window_Half'], wide: 'Metal_Window', plain: 'Metal_Plain_3', col: 'Metal_Column_Center', cor: 'Cornice_Metal_Center' },
+};
+// A building of Wm × Dm metres (front at +z), F storeys. Ground floor: 'shop' fronts, 'res' entrance or 'office' glass.
+function qBuilding(r, Wm, Dm, F, styleName, ground, opts = {}) {
+  const st = QSTYLE[styleName], tint = opts.tint ?? 0xffffff, H = 3, hw = Wm / 2, hd = Dm / 2;
+  const sides = [[0, hd, 0, Wm, true], [0, -hd, Math.PI, Wm, false], [hw, 0, Math.PI / 2, Dm, false], [-hw, 0, -Math.PI / 2, Dm, false]];
+  for (const [cx, cz, rot, len, front] of sides) {
+    const n = Math.round(len / 2), ux = Math.cos(rot), uz = -Math.sin(rot);
+    const at2 = k => [cx + ux * (-len / 2 + 1 + k * 2), cz + uz * (-len / 2 + 1 + k * 2)];
+    for (let f = 0; f < F; f++) {
+      const y = f * H;
+      for (let k = 0; k < n; k++) {
+        const [x, z] = at2(k), mid = k === Math.floor(n / 2);
+        let piece;
+        if (f === 0) {
+          if (front) piece = mid ? (ground === 'res' ? 'DoorFrame_Wooden' : 'DoorFrame_Metal_Single') : ground === 'shop' ? (styleName === 'stone' || styleName === 'pale' ? 'Trim_FirstFloor_Window_001' : 'Metal_FirstFloor_Window') : ground === 'office' ? 'Metal_FullWindow' : (k % 2 ? st.win[0] : 'Brick_BottomTrim');
+          else piece = ground === 'shop' && k === 0 ? 'Metal_FirstFloor_Wall' : (k % 3 === 1 ? st.win[0] : st.plain);
+        } else {
+          const winEvery = front ? 1 : 2;
+          if (st.wide && front && k + 1 < n && k % 2 === 0 && f % 2 === 1) { const [x2, z2] = at2(k + .5); qp(st.wide, x2, y, z2, rot, 1, 1, 1, tint); k++; continue; }
+          piece = k % winEvery === 0 ? st.win[(k + f) % st.win.length] : st.plain;
+          if (!front && (k === 0 || k === n - 1)) piece = st.plain;
+        }
+        if (f === 0 && front) qp(piece, x, y, z, rot, 1, 1, 1, tint); else qf(piece, x, y, z, rot, tint);
+      }
+    }
+    for (let k = 0; k < n; k++) { const [x, z] = at2(k); qp(front ? st.cor : 'Cornice_Brick_Center', x, F * H, z, rot, 1, 1, 1, tint); }
+  }
+  // corner columns over the full height (detailed at the front), roof, roof details
+  for (const [x, z] of [[hw, hd], [-hw, hd], [hw, -hd], [-hw, -hd]]) for (let f = 0; f < F; f++) qp(z > 0 ? st.col : 'Metal_Column_Center', x, f * H, z);
+  qp('Roof_4x4', 0, F * H + .25, 0, 0, Wm / 4, 1, Dm / 4);
+  if (st.mansard && opts.mansard !== false && Dm >= 8) {
+    const n = Math.round(Wm / 2);
+    for (let k = 0; k < n; k++) qp(k % 3 ? 'Roof_Slate_Center' : 'Roof_Slate_Window_1', -hw + 1 + k * 2, F * H, hd);
+    for (let k = 0; k < n; k++) qp('Roof_Slate_Center', hw - 1 - k * 2, F * H, -hd, Math.PI);
+  }
+  for (let k = 0; k < 1 + (r() * 2 | 0); k++) qp('Prop_ACUnit', (r() - .5) * (Wm - 3), F * H + .26, (r() - .5) * (Dm - 3) - (st.mansard ? 1 : 0), (r() * 4 | 0) * Math.PI / 2);
+  if (ground === 'res') qp('Stairs_Entrance_Concrete', 0, 0, hd);
+  return F * H;
+}
+// Lot buildings in the downtown kit: frontage W tiles, depth D tiles; building sits at the street, yard / parking behind.
+function qLot(r, W, D, zoneC, L) {
+  const Wm = W * 16 - (W > 1 ? 2 : 3), styles = zoneC === 'O' ? ['stone', 'loft', 'pale'] : zoneC === 'C' ? ['brick', 'loft', 'stone', 'pale'] : ['brick', 'pale', 'brick', 'stone'];
+  const style = pick(r, styles), ground = zoneC === 'R' ? (r() < .35 ? 'shop' : 'res') : zoneC === 'O' ? 'office' : 'shop';
+  const Fmax = L === 1 ? 3 : L === 2 ? 6 : 10, F = Math.max(2, Fmax - (r() * 2 | 0));
+  const Dm = Math.min(D * 16 - 4, L === 1 ? 10 : 12 + (D > 1 ? 4 : 0)), tint = pick(r, [0xffffff, 0xffffff, 0xe9d8cc, 0xcfc0b4, 0xffe7d2]);
+  const zFront = D * 8 - 1.2, cz = zFront - Dm / 2;
+  lotGround(W, D, M.PAVE);
+  const k0 = PARTS.length;
+  qBuilding(r, Wm, Dm, F, style, ground, { tint });
+  for (let k = k0; k < PARTS.length; k++) PARTS[k][0].translate(0, .02, cz * MU);
+  // tall levels: a slimmer tower rises from the block (kept moderate for phones)
+  if (L === 3 && W * D >= 2) { const k1 = PARTS.length, tW = Math.min(Wm - 4, 14), tF = 6 + (r() * 6 | 0); qBuilding(r, tW, 10, tF, pick(r, ['loft', 'stone']), 'office', { mansard: false }); for (let k = k1; k < PARTS.length; k++) PARTS[k][0].translate(0, .02 + F * 3 * MU, (cz - 1) * MU); }
+  // behind the building: parking or a courtyard with trees
+  const backZ = (cz - Dm / 2) * MU, depth = backZ + D / 2;
+  if (depth > .35) { if (zoneC !== 'R' || r() < .5) parking(-W / 2 + .1, W / 2 - .1, -D / 2 + .06, backZ - .04); else { box(W - .2, .02, depth - .1, 0, .02, -D / 2 + depth / 2, M.LAWN); for (let k = 0; k < W * 2; k++) blob(.08, -W / 2 + .3 + k * (W - .6) / Math.max(1, W * 2 - 1), .2, -D / 2 + depth / 2, 0x4f8a3a, k); } }
+}
 // ============================================================ Parcel (lot) buildings
 // A lot is W tiles of street frontage × D tiles deep. Local frame: x along the street, front edge at z = +D/2.
 function at(ox, oz, fn) {   // run a 1×1 generator shifted to another tile of the lot
@@ -920,6 +1084,7 @@ function frontBlock(W, D, bd, fl, wall, tint, shops) {
 }
 const LOTGEN = {
   R(r, W, D, L) {
+    if (L >= 2 && MK) return qLot(r, W, D, 'R', L);
     const fz = (D - 1) / 2;
     if (L === 1 || W === 1) {   // houses (or a single block) per frontage tile, gardens / parking behind
       for (let a = 0; a < W; a++) {
@@ -951,6 +1116,7 @@ const LOTGEN = {
     }
   },
   C(r, W, D, L) {
+    if (MK) return qLot(r, W, D, 'C', L);
     const fz = (D - 1) / 2;
     if (W === 1) { at(0, fz, () => GEN['C' + L](r)); for (let b = 1; b < D; b++) at(0, fz - b, () => backLot(r, 'park')); return; }
     lotGround(W, D, M.PAVE);
@@ -993,6 +1159,7 @@ const LOTGEN = {
     for (let k = 0; k < 3; k++) box(.24, .1, .1, W / 2 - .3, .02 + k * .1, D / 2 - .25 - (k % 2) * .12, M.PAINT, pick(r, [0x2f6e9a, 0xa6402f, 0x3f7a45, 0xc9a13b]));
   },
   O(r, W, D, L) {
+    if (MK) return qLot(r, W, D, 'O', L);
     const fz = (D - 1) / 2;
     if (W === 1) { at(0, fz, () => GEN['O' + L](r)); for (let b = 1; b < D; b++) at(0, fz - b, () => backLot(r, b === 1 ? 'court' : 'park')); return; }
     lotGround(W, D, M.PAVE);
@@ -1224,10 +1391,11 @@ function commit(mesh, n) { n = Math.min(n, mesh.instanceMatrix.count); mesh.coun
 
 const BMESH = {};
 const VM = {}, PM = {};
+const LOCAR = [0xe8e8e6, 0xf2f2f2, 0x2a2d31, 0x18263d, 0x8b8f94, 0x2b2b2b, 0xb9bcc0, 0x6e1c24, 0xc9cdd2, 0x46505a, 0x8a2a24, 0x3c4e5f];
 const CIV = ['sedan', 'sedan-sports', 'hatchback-sports', 'suv', 'suv-luxury', 'taxi', 'van'], TRUCKS = ['delivery', 'truck', 'garbage-truck'], SPECIAL = ['police', 'ambulance', 'firetruck'];
 const CAR_SCALE = .11, CAR_FLIP = 0, CAR_TINT = [0xffffff, 0xffffff, 0xffffff, 0xf2d6d6, 0xd8e4f5, 0xdedede, 0x9a9a9a, 0xe8f0d8];
 let CARS = null, CARTEX = null;
-let hwyM, barrierM, railM, signM, sigM, sig = new Uint8Array(4096), sigList = [], roadM, walkM, cornerM, dashM, zebraM, lampM, tlightM, treeA, treeB, pedM, stainM, trackM, holeM, stopM, lineDotM, medianM, snowPts, rubbleM, zoneM, ovM, prevM, beaconM, flameM, smokeM, glowM;
+let carLo, hwyM, barrierM, railM, signM, sigM, sig = new Uint8Array(4096), sigList = [], roadM, walkM, cornerM, dashM, zebraM, lampM, tlightM, treeA, treeB, pedM, stainM, trackM, holeM, stopM, lineDotM, medianM, snowPts, rubbleM, zoneM, ovM, prevM, beaconM, flameM, smokeM, glowM;
 const glowMat = new THREE.MeshBasicMaterial({ color: 0xffd39a, transparent: true, opacity: 0, toneMapped: false, depthWrite: false });
 
 function wearTex(kind) {
@@ -1328,12 +1496,16 @@ function buildMeshes() {
     }
     g.scale(CAR_SCALE, CAR_SCALE, CAR_SCALE); g.rotateY(CAR_FLIP); g.computeBoundingSphere();
     VM[name] = mkInst(g, carMat, SPECIAL.includes(name) ? 40 : 200);
-    if (CIV.includes(name) || TRUCKS.includes(name)) PM[name] = mkInst(g, carMat, 1200);
+    if ((CIV.includes(name) || TRUCKS.includes(name)) && !PM[name]) PM[name] = mkInst(g, carMat, 1200);
   }
   box(.12, .1, .44, 0, .03, 0, M.PAINT, 0xffffff); box(.124, .045, .4, 0, .075, -.01, M.DARK, 0x1b232c); box(.118, .045, .006, 0, .06, .221, M.DARK, 0x1b232c);
   box(.11, .01, .4, 0, .13, 0, M.TRIM, 0xe8e8e8); box(.07, .02, .1, 0, .14, -.08, M.TRIM, 0xcfd3d6);
   for (const x of [-.058, .058]) for (const z of [-.14, .14]) { const g = new THREE.CylinderGeometry(.024, .024, .016, 10); g.rotateZ(Math.PI / 2); g.translate(x, .024, z); addPart(g, M.PAINT, 0x16181a); }
   VM.bus = mkInst(finish(), MATS, 80);
+  // light parked car for phones (the detailed models are ~2k triangles each)
+  box(.118, .036, .27, 0, .012, 0, M.PAINT, 0xffffff); box(.104, .036, .15, 0, .048, -.012, M.DARK, 0x1c232b); box(.1, .006, .13, 0, .084, -.012, M.PAINT, 0xffffff);
+  for (const x of [-.055, .055]) for (const z of [-.085, .085]) { const g = new THREE.CylinderGeometry(.022, .022, .014, 8); g.rotateZ(Math.PI / 2); g.translate(x, .022, z); addPart(g, M.DARK, 0x111111); }
+  carLo = mkInst(finish(), MATS, 2400);
   box(.16, .005, .06, 0, .1, 0, M.TRIM, 0x5b6168); box(.16, .07, .004, 0, .03, -.028, M.DARK, 0x9fc2d6); box(.004, .07, .06, -.08, .03, 0, M.TRIM, 0x5b6168); box(.004, .07, .06, .08, .03, 0, M.TRIM, 0x5b6168);
   box(.12, .012, .03, 0, .045, -.012, M.TRIM, 0x6d4c33); box(.012, .12, .012, .1, .03, .02, M.PAINT, 0x1e6fd9); box(.04, .04, .006, .1, .13, .02, M.PAINT, 0x1e6fd9);
   stopM = mkInst(finish(), MATS, 600);
@@ -1601,8 +1773,8 @@ function validateLots() {   // any edit that touches a parcel (road, rezoning, b
 const LOTMESH = {};
 function lotMesh(lot) {
   const zc = 'RCIO'[lot.zone - 1];
-  if (lot.W === 1 && lot.D === 1) { const list = BMESH[zc + lot.lvl]; return list[lot.v % list.length]; }
-  const key = `${zc}${lot.lvl}_${lot.W}x${lot.D}_${lot.v % 3}`;
+  if (lot.W === 1 && lot.D === 1 && (zc === 'I' || (zc === 'R' && lot.lvl === 1) || !MK)) { const list = BMESH[zc + lot.lvl]; return list[lot.v % list.length]; }
+  const key = `${zc}${lot.lvl}_${lot.W}x${lot.D}_${lot.v % 2}`;
   if (!LOTMESH[key]) { LOTGEN[zc](rng(key.split('').reduce((h, c) => h * 31 + c.charCodeAt(0) | 0, 7)), lot.W, lot.D, lot.lvl); LOTMESH[key] = mkInst(finish(), MATS, 160); }
   return LOTMESH[key];
 }
@@ -1693,7 +1865,7 @@ function rebuild() {
   const counts = new Map(), inc = m => { const n = counts.get(m) || 0; counts.set(m, n + 1); return n; };
   const P = (m, ...a) => put(m, inc(m), ...a);
   const ovOn = overlay !== 'none';
-  const parkCar = (x, z, rot, h) => { const name = CIV[Math.floor(h * 977) % CIV.length]; P(PM[name], x, .02, z, 1, 1, 1, rot, CAR_TINT[Math.floor(h * 131) % CAR_TINT.length]); };
+  const parkCar = (x, z, rot, h) => { if (quality < 2) return P(carLo, x, .02, z, 1, 1, 1, rot, LOCAR[Math.floor(h * 131) % LOCAR.length]); const name = CIV[Math.floor(h * 977) % CIV.length]; P(PM[name], x, .02, z, 1, 1, 1, rot, CAR_TINT[Math.floor(h * 131) % CAR_TINT.length]); };
   const plant = (m, x, z, s, r, rot) => {
     const roll = hash(Math.round(x * 97), Math.round(z * 89), 7);
     const season = SEASON_OF[month % 12], aut = season === 3 ? .7 : .07, blo = season === 1 ? .3 : .03;
@@ -1784,7 +1956,7 @@ function rebuild() {
       if (ovOn && overlay !== 'traffic') { const v = ovValue(i); v === null ? _C.set(0x9a9ea8) : rampColor(v); }
       else { _C.setScalar(.95 + H(6) * .05); if (served[i] !== 3 && (served[i] & 3) !== 3) _C.lerp(GRAY, .55); if (burn[i]) _C.lerp(BLACK, .55); }
       P(mesh, lot.cx, 0, lot.cz, 1, 1, 1, rot, _C);
-      (mesh.geometry.userData.park || []).forEach(([px, pz, pr], k) => { if (H(200 + k) < .65) { const [ox, oz] = rotXZ(px, pz, rot); parkCar(lot.cx + ox, lot.cz + oz, rot + pr + (H(300 + k) < .5 ? 0 : Math.PI), H(400 + k)); } });
+      (mesh.geometry.userData.park || []).forEach(([px, pz, pr], k) => { if (H(200 + k) < .45) { const [ox, oz] = rotXZ(px, pz, rot); parkCar(lot.cx + ox, lot.cz + oz, rot + pr + (H(300 + k) < .5 ? 0 : Math.PI), H(400 + k)); } });
       continue;
     }
     if (!lvl[i]) {
@@ -1811,6 +1983,7 @@ function rebuild() {
   for (const key in BMESH) for (const m of BMESH[key]) commit(m, counts.get(m) || 0);
   for (const key in LOTMESH) commit(LOTMESH[key], counts.get(LOTMESH[key]) || 0);
   for (const k in PM) commit(PM[k], counts.get(PM[k]) || 0);
+  commit(carLo, counts.get(carLo) || 0);
   for (const m of [hwyM, barrierM, railM, signM, roadM, walkM, cornerM, dashM, zebraM, trackM, stainM, holeM, lampM, glowM, tlightM, treeA, treeB, rubbleM, zoneM, ovM, stopM, lineDotM, medianM]) commit(m, counts.get(m) || 0);
   for (const s of services.values()) s.mesh.traverse(o => { if (o.isMesh) o.material = ovOn && overlay !== 'traffic' ? grayMat : MATS; });
   roadMaskCache = null;
@@ -2760,7 +2933,7 @@ $('msModal').onclick = e => { if (e.target.id === 'msModal') $('msModal').classL
 $('menu').onclick = e => { if (e.target.id === 'menu') $('menu').classList.add('hidden'); };
 $('help').onclick = () => { $('menu').classList.add('hidden'); $('hint').classList.remove('hidden'); };
 $('fs').onclick = () => { const d = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : d.requestFullscreen?.())?.catch?.(() => {}); };
-document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { quality = +b.dataset.q; store.set('kk.q', quality); applyQuality(); });
+document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { quality = +b.dataset.q; store.set('kk.q', quality); applyQuality(); rebuild(); });
 function syncDn() { $('dnBtn').textContent = dayNight ? 'Açık' : 'Kapalı'; $('dnBtn').classList.toggle('on', dayNight); }
 $('dnBtn').onclick = () => { dayNight = !dayNight; store.set('kk.dn', dayNight ? '1' : '0'); syncDn(); };
 syncDn();
@@ -2836,12 +3009,15 @@ async function loadAssets() {
   const jobs = TEXNAMES.map(async n => { const [diff, nor] = await Promise.all([loadImg(`${ASSET}tex/${n}_diff.jpg`), loadImg(`${ASSET}tex/${n}_nor.jpg`)]); IMG[n] = { diff, nor }; });
   toLoad++;
   jobs.push((EMBED?.cars ? Promise.resolve(EMBED.cars) : fetch(ASSET + 'cars/cars.json').then(r => { if (!r.ok) throw new Error('Araç dosyası yüklenemedi'); return r.json(); })).then(j => { CARS = j; loaded++; progress(); }));
+  toLoad++;
+  jobs.push((EMBED?.mk ? Promise.resolve(EMBED.mk) : fetch(ASSET + 'mk/mkit.json').then(r => { if (!r.ok) throw new Error('Bina modelleri yüklenemedi'); return r.json(); })).then(j => { MK = j; loaded++; progress(); }));
+  for (const t of MKTEX) jobs.push(loadImg(`${ASSET}mk/${t}.jpg`).then(im => { MKIMG[t] = im; }));
   jobs.push(loadImg(ASSET + 'cars/colormap.png').then(im => { CARTEX = new THREE.Texture(im); CARTEX.needsUpdate = true; CARTEX.flipY = false; CARTEX.colorSpace = THREE.SRGBColorSpace; CARTEX.magFilter = CARTEX.minFilter = THREE.NearestFilter; CARTEX.generateMipmaps = false; }));
   await Promise.all(jobs);
   $('loadMsg').textContent = 'Şehir inşa ediliyor…';
   await new Promise(r => setTimeout(r, 30));
   buildMaterials(); buildMeshes(); buildTerrain(); buildScenery();
-  MATS.forEach((m, k) => addSnow(m, k === M.LEAF ? .6 : k === M.PAVE ? .7 : 1)); addSnow(roadM.material, .35); addSnow(walkM.material, .7); addSnow(cornerM.material, .7);
+  MATS.forEach((m, k) => { if (k !== M.Q_GLASS && k !== M.Q_INT) addSnow(m, k === M.LEAF ? .6 : k === M.PAVE ? .7 : 1); }); addSnow(roadM.material, .35); addSnow(walkM.material, .7); addSnow(cornerM.material, .7);
   { const n = 1500, pos = new Float32Array(n * 3); for (let k = 0; k < n; k++) { pos[k * 3] = (Math.random() - .5) * 40; pos[k * 3 + 1] = Math.random() * 18; pos[k * 3 + 2] = (Math.random() - .5) * 40; }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     snowPts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: .07, transparent: true, opacity: .85, depthWrite: false })); snowPts.visible = false; scene.add(snowPts); }
@@ -2864,7 +3040,7 @@ applyQuality();
   renderer.setAnimationLoop(frame);
   window.__kent = {
     get stats() { return stats; }, get money() { return money; }, get month() { return month; }, get demand() { return demand; }, get net() { return net; },
-    info() { renderer.info.autoReset = false; renderer.info.reset(); if (composer) composer.render(); else renderer.render(scene, camera); const r = renderer.info.render; renderer.info.autoReset = true; let inst = 0, tris = 0; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) { inst += o.count; const g = o.geometry; tris += o.count * (g.index ? g.index.count : g.attributes.position.count) / 3; } }); return { calls: r.calls, tris: r.triangles, inst, instTris: Math.round(tris), q: quality, pr: renderer.getPixelRatio() }; },
+    info() { renderer.info.autoReset = false; renderer.info.reset(); if (composer) composer.render(); else renderer.render(scene, camera); const r = renderer.info.render; renderer.info.autoReset = true; let inst = 0, tris = 0; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) { inst += o.count; const g = o.geometry; tris += o.count * (g.index ? g.index.count : g.attributes.position.count) / 3; } }); const top = []; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) { const g = o.geometry, t = (g.index ? g.index.count : g.attributes.position.count) / 3; top.push([Object.keys(LOTMESH).find(k => LOTMESH[k] === o) || (o === treeA ? 'treeA' : o === treeB ? 'treeB' : '?'), o.count, Math.round(t), Math.round(t * o.count)]); } }); top.sort((a, b) => b[3] - a[3]); return { calls: r.calls, tris: r.triangles, inst, instTris: Math.round(tris), q: quality, pr: renderer.getPixelRatio(), top: top.slice(0, 12) }; },
     get lots() { const o = {}; for (const l of lots.values()) { const k = 'RCIO'[l.zone - 1] + l.lvl + ' ' + l.W + 'x' + l.D; o[k] = (o[k] || 0) + 1; } return o; },
     get vehicles() { return vehicles.length; }, get vk() { const o = {}; for (const v of vehicles) o[v.kind] = (o[v.kind] || 0) + 1; o.arrivals = arrivals.length; o.sig = sigList.length; return o; }, get burning() { return burning.size; },
     simTick, setTool, newGame, startFire: (x, z) => startFire(idx(x, z)), setOverlay, focusOn, setDay: v => { dayT = v; }, setDayNight: v => { dayNight = v; },
@@ -2873,7 +3049,7 @@ applyQuality();
     get dbg() { return { scene, renderer, sky, clouds, hills, water, ground, envScene, VM, PM, setQuality: q => { quality = q; applyQuality(); }, updateEnv }; },
     addXp, policy: k => { policies.add(k); refresh(); }, get xp() { return xp; }, get ms() { return msLevel; }, get lines() { return busLines.map(L => ({ id: L.id, ok: L.ok, buses: L.buses, stops: L.stops.length })); }, setMonth: m => { month = m; rebuild(); hud(); },
     loop(on) { renderer.setAnimationLoop(on ? frame : null); if (on) clock.getDelta(); },
-    quality(q) { quality = q; applyQuality(); },
+    quality(q) { quality = q; applyQuality(); rebuild(); },
     lookAt(x, z, dist = 14, height = 10) { controls.target.set(wx(x), 0, wx(z)); camera.position.set(wx(x) - dist * .6, height, wx(z) + dist); camera.lookAt(controls.target); camera.updateMatrixWorld(); },
   };
 })();
