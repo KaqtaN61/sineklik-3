@@ -481,6 +481,22 @@ function addSnow(mat, amt = 1) {
   };
   const key = 'snow' + amt + mat.uuid; mat.customProgramCacheKey = () => key; mat.needsUpdate = true;
 }
+// Cheap contact shadow: walls darken toward the ground, like ambient occlusion, on every quality level.
+function addGroundAO(mat) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    prev?.call(mat, sh, r);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vAoY; varying float vAoN;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+{ vec4 aw = vec4(transformed, 1.0); vec3 an = objectNormal;
+#ifdef USE_INSTANCING
+aw = instanceMatrix * aw; an = mat3(instanceMatrix) * an;
+#endif
+aw = modelMatrix * aw; vAoY = aw.y; vAoN = abs(normalize(mat3(modelMatrix) * an).y); }`);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vAoY; varying float vAoN;')
+      .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= mix(1.0, mix(.5, 1.0, smoothstep(.0, .2, vAoY)), 1.0 - vAoN);');
+  };
+}
 function buildMaterials() {
   const fac = (kind, wall, seed) => {
     const f = makeFacade(kind, wall, seed);
@@ -506,12 +522,13 @@ function buildMaterials() {
   MATS[M.PAINT] = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .32, metalness: .45 });
   const lawn = canvas(512), lg = lawn.getContext('2d'); lg.drawImage(IMG.grass.diff, 0, 0, 512, 512);
   const ld = lg.getImageData(0, 0, 512, 512), lp = ld.data;
-  for (let k = 0; k < lp.length; k += 4) { const l = (lp[k] * .3 + lp[k + 1] * .59 + lp[k + 2] * .11) / 255, t = clamp((l - .15) / .5, 0, 1); lp[k] = 62 + t * 62; lp[k + 1] = 98 + t * 72; lp[k + 2] = 36 + t * 30; }
+  for (let k = 0; k < lp.length; k += 4) { const l = (lp[k] * .3 + lp[k + 1] * .59 + lp[k + 2] * .11) / 255, t = clamp((l - .15) / .5, 0, 1); lp[k] = 50 + t * 50; lp[k + 1] = 70 + t * 52; lp[k + 2] = 30 + t * 22; }
   lg.putImageData(ld, 0, 0);
   MATS[M.LAWN] = new THREE.MeshStandardMaterial({ vertexColors: true, map: texFrom(lawn), normalMap: texFrom(IMG.grass.nor, false), roughness: .95 });
   MATS[M.PAVE] = photo('pavers');
   MATS[M.DARK] = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .12, metalness: .7 });
   MATS[M.LEAF] = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, normalMap: texFrom(IMG.forest.nor, false), normalScale: new THREE.Vector2(1.2, 1.2) });
+  MATS.forEach((m, k) => { if (k !== M.LAWN && k !== M.PAVE) addGroundAO(m); });
   MATS[M.FOLIAGE] = new THREE.MeshStandardMaterial({ vertexColors: true, map: leafTexture(), alphaTest: .45, side: THREE.DoubleSide, roughness: .85 });
 }
 
@@ -563,6 +580,7 @@ function gable(w, rh, d, x, y, z, mat, col = 0xffffff, ridgeX = true) {
 function hip(w, rh, d, x, y, z, mat, col = 0xffffff) { const g = new THREE.ConeGeometry(.7071, 1, 4); g.rotateY(Math.PI / 4); g.translate(0, .5, 0); g.scale(w, rh, d); g.translate(x, y, z); addPart(g, mat, col); }
 function lathe(pts, x, y, z, mat, col = 0xffffff, segs = 20) { const g = new THREE.LatheGeometry(pts.map(([r, h]) => new THREE.Vector2(r, h)), segs); g.translate(x, y, z); addPart(g, mat, col); }
 function blob(r, x, y, z, col, seed) {
+  return foliage(x, y, z, r, r * .9, r, Math.max(8, Math.round(r * 160)), r * .85, col, seed * 31 + 7);   // leafy clusters everywhere, no solid balls
   const g = new THREE.IcosahedronGeometry(r, 1), p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const vx = p.getX(i), vy = p.getY(i), vz = p.getZ(i), k = 1 + (hash(Math.round(vx * 1e3), Math.round(vy * 1e3), Math.round(vz * 1e3) + seed) - .5) * .35;
@@ -666,7 +684,7 @@ const GEN = {
       box(w * .76, .04, .006, 0, y + .014, z0 + d / 2 + .072, M.DARK, 0x7d93a6);
     }
     box(.2, .014, .1, 0, .2, z0 + d / 2 + .05, M.TRIM, 0x50555b);
-    if (r() < .35) box(w * .5, .02, d * .4, w * .1, .06 + h, z0 + d * .15, M.LEAF, 0x5d8f45);
+    if (r() < .35) box(w * .5, .02, d * .4, w * .1, .06 + h, z0 + d * .15, M.LEAF, 0x4f6638);
     if (r() < .4) for (let k = 0; k < 3; k++) box(.09, .006, .06, -w * .3 + k * .1, .065 + h, z0 + d * .25, M.DARK, 0x1d3552);
     if (r() < .5) { cyl(.012, .016, .1, .38, .02, .38, M.TRIM, 0x5a4632, 6); blob(.075, .38, .17, .38, 0x4f8a3a, 5); }
     if (r() < .5) { box(.12, .004, .22, -.36, .02, .34, M.TRIM, 0x4a4d52); PARK.push([-.36, .34, 0]); }
@@ -1025,7 +1043,7 @@ function buildMeshes() {
   box(.12, .012, .03, 0, .045, -.012, M.TRIM, 0x6d4c33); box(.012, .12, .012, .1, .03, .02, M.PAINT, 0x1e6fd9); box(.04, .04, .006, .1, .13, .02, M.PAINT, 0x1e6fd9);
   stopM = mkInst(finish(), MATS, 600);
   lineDotM = mkInst(new THREE.CylinderGeometry(.05, .05, .006, 10).translate(0, .026, 0), new THREE.MeshBasicMaterial({ color: 0xffffff }), NN * 2, false);
-  box(1, .025, .07, 0, .02, 0, M.TRIM, 0xc9c6bf); box(1, .028, .05, 0, .02, 0, M.LEAF, 0x5d8f45);
+  box(1, .025, .07, 0, .02, 0, M.TRIM, 0xc9c6bf); box(1, .028, .05, 0, .02, 0, M.LEAF, 0x4c6436);
   medianM = mkInst(finish(), MATS, NN);
   { const g = new THREE.CapsuleGeometry(.009, .05, 3, 6); g.translate(0, .034, 0); addPart(g, M.PAINT, 0xffffff); const h = new THREE.SphereGeometry(.009, 6, 5); h.translate(0, .078, 0); addPart(h, M.TRIM, 0xe0b899); }
   pedM = mkInst(finish(), MATS, 400);
