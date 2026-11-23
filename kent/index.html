@@ -346,7 +346,7 @@ controls.listenToKeyEvents(window); controls.keyPanSpeed = 18;
 function resetView() {
   const portrait = innerWidth < innerHeight;
   controls.target.set(-4, 0, 2);
-  camera.position.set(-4 - 10, portrait ? 30 : 18, 2 + (portrait ? 26 : 18));
+  camera.position.set(-4 - 9, portrait ? 17 : 11, 2 + (portrait ? 24 : 17));
 }
 resetView();
 
@@ -382,8 +382,7 @@ function setupComposer() {
   }
   bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.15, 0.4, 0.92);
   composer.addPass(bloom);
-  tiltH = new ShaderPass(HorizontalTiltShiftShader); tiltV = new ShaderPass(VerticalTiltShiftShader);
-  composer.addPass(tiltH); composer.addPass(tiltV);
+  tiltH = tiltV = null;   // no tilt-shift: it makes the city look like a toy
   composer.addPass(new OutputPass());
   sizeTilt();
 }
@@ -464,7 +463,7 @@ function makeFacade(kind, wall, seed) {
   return { map: texFrom(cm), normalMap: texFrom(cn, false), orm: texFrom(co, false), em: texFrom(ce) };
 }
 
-const M = { TRIM: 0, BRICK: 1, BEIGE: 2, PLASTER: 3, GREY: 4, STONE: 5, GLASS: 6, SHOP: 7, IND: 8, INDBRICK: 9, RCLAY: 10, RGREY: 11, RGRAVEL: 12, RMETAL: 13, PAINT: 14, LAWN: 15, PAVE: 16, DARK: 17, LEAF: 18 };
+const M = { TRIM: 0, BRICK: 1, BEIGE: 2, PLASTER: 3, GREY: 4, STONE: 5, GLASS: 6, SHOP: 7, IND: 8, INDBRICK: 9, RCLAY: 10, RGREY: 11, RGRAVEL: 12, RMETAL: 13, PAINT: 14, LAWN: 15, PAVE: 16, DARK: 17, LEAF: 18, FOLIAGE: 19 };
 const FACADES = new Set([M.BRICK, M.BEIGE, M.PLASTER, M.GREY, M.STONE, M.GLASS, M.SHOP, M.IND, M.INDBRICK]);
 const MATS = [];
 const emissiveMats = [];
@@ -513,6 +512,7 @@ function buildMaterials() {
   MATS[M.PAVE] = photo('pavers');
   MATS[M.DARK] = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .12, metalness: .7 });
   MATS[M.LEAF] = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, normalMap: texFrom(IMG.forest.nor, false), normalScale: new THREE.Vector2(1.2, 1.2) });
+  MATS[M.FOLIAGE] = new THREE.MeshStandardMaterial({ vertexColors: true, map: leafTexture(), alphaTest: .45, side: THREE.DoubleSide, roughness: .85 });
 }
 
 // ============================================================ Procedural geometry kit
@@ -533,10 +533,10 @@ function worldUV(g, k) {   // planar projection chosen per face normal, in world
     else uv.setXY(i, p.getX(i) * k, p.getY(i) * k);
   }
 }
-const TEXK = { [M.RCLAY]: 4, [M.RGREY]: 4, [M.RGRAVEL]: 2.5, [M.RMETAL]: 3, [M.LAWN]: 1.6, [M.PAVE]: 4, [M.TRIM]: 1, [M.PAINT]: 1, [M.DARK]: 1, [M.LEAF]: 3 };
+const TEXK = { [M.FOLIAGE]: -1, [M.RCLAY]: 4, [M.RGREY]: 4, [M.RGRAVEL]: 2.5, [M.RMETAL]: 3, [M.LAWN]: 1.6, [M.PAVE]: 4, [M.TRIM]: 1, [M.PAINT]: 1, [M.DARK]: 1, [M.LEAF]: 3 };
 function addPart(g, mat, col) {
   g = colorize(g, col);
-  if (!FACADES.has(mat)) worldUV(g, TEXK[mat] ?? 1);
+  if (!FACADES.has(mat) && TEXK[mat] !== -1) worldUV(g, TEXK[mat] ?? 1);
   PARTS.push([g, mat]);
 }
 // Facade box: side UVs tile one window bay per 3.2 m and one row per storey.
@@ -571,6 +571,32 @@ function blob(r, x, y, z, col, seed) {
   let m = mergeVertices(g); m.computeVertexNormals(); m.translate(x, y, z);
   addPart(m, M.LEAF, col);
 }
+// Leaf clusters drawn as many small leaves; alpha-tested cards read as real foliage instead of solid balls.
+function leafTexture() {
+  const S = 256, c = canvas(S), g = c.getContext('2d'), R = rng(4242);
+  for (let k = 0; k < 900; k++) {
+    const a = R() * Math.PI * 2, d = Math.sqrt(R()) * S * .44, x = S / 2 + Math.cos(a) * d, y = S / 2 + Math.sin(a) * d;
+    const l = 55 + R() * 45 - d / S * 30;
+    g.fillStyle = `hsl(${85 + R() * 30},${18 + R() * 20}%,${l}%)`;
+    g.save(); g.translate(x, y); g.rotate(R() * 6.28); g.beginPath(); g.ellipse(0, 0, 3 + R() * 5, 1.6 + R() * 2.4, 0, 0, 6.28); g.fill(); g.restore();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO; return t;
+}
+function foliage(cx, cy, cz, rx, ry, rz, n, size, col, seed) {
+  const R = rng(seed);
+  for (let k = 0; k < n; k++) {
+    const u = R() * 2 - 1, a = R() * Math.PI * 2, rr = Math.cbrt(.35 + R() * .65), s = Math.sqrt(1 - u * u);
+    const dx = Math.cos(a) * s * rr, dy = u * rr, dz = Math.sin(a) * s * rr;
+    const w = size * (.75 + R() * .5), g = new THREE.PlaneGeometry(w, w);
+    g.rotateX(R() * Math.PI); g.rotateY(R() * Math.PI); g.rotateZ(R() * Math.PI);
+    g.translate(cx + dx * rx, cy + dy * ry, cz + dz * rz);
+    // normals point away from the crown centre: soft, rounded light like a real canopy
+    const nn = g.attributes.normal, pp = g.attributes.position;
+    for (let i = 0; i < nn.count; i++) { const v = new THREE.Vector3(pp.getX(i) - cx, (pp.getY(i) - cy) * 1.3 + ry * .3, pp.getZ(i) - cz).normalize(); nn.setXYZ(i, v.x, v.y, v.z); }
+    const shade = .55 + .45 * (dy * .5 + .5);   // darker inside and underneath
+    addPart(g, M.FOLIAGE, new THREE.Color(col).multiplyScalar(shade).getHex());
+  }
+}
 function lot(mat, s = .98) { box(s, .02, s, 0, 0, 0, mat, mat === M.LAWN ? 0xffffff : 0xd8d6d0); }
 function ac(x, y, z) { box(.05, .03, .04, x, y, z, M.TRIM, 0xbfc3c7); }
 function finish() {
@@ -591,7 +617,7 @@ function finish() {
 // ---- Building generators (front faces +z, toward the road)
 const WALLS_RES = [M.BRICK, M.BEIGE, M.PLASTER, M.GREY];
 const TINTS = [0xffffff, 0xf6eee2, 0xe9eef2, 0xf7ead6, 0xeef0e6];
-const PASTEL = [0xffffff, 0xf7e7c4, 0xd9e8f5, 0xdcefd6, 0xf6d9cf, 0xe9e2f3, 0xfff3d6, 0xf2f2ea, 0xd5ece9, 0xf5e0b8];
+const PASTEL = [0xffffff, 0xece4d6, 0xdcd8d0, 0xe6dccb, 0xd8cfc2, 0xcfc9bf, 0xe9e1d3, 0xd6d2ca, 0xc9b9a3, 0xe0d2bc];
 const wallTint = (r, wall) => wall === M.BRICK ? pick(r, [0xffffff, 0xf3e4dc, 0xe8d9d0]) : wall === M.GREY ? pick(r, [0xffffff, 0xe6eef5, 0xf2ece0]) : pick(r, PASTEL);
 const roofTint = (r, roof) => roof === M.RCLAY ? pick(r, [0xffffff, 0xd99a82, 0xb8735f, 0xe8c0a8]) : pick(r, [0xffffff, 0x9fb4c9, 0x8fa88f, 0x6c727c, 0xb59f8a]);
 const PARK = [];   // parking spots exported by a generator: [x, z, rot]
@@ -966,11 +992,12 @@ function buildMeshes() {
   tlightM = mkInst(finish(), MATS, NN);
   glowM = mkInst(new THREE.SphereGeometry(.02, 8, 6), glowMat, NN, false);
   // trees: broadleaf and conifer
-  cyl(.014, .022, .2, 0, 0, 0, M.TRIM, 0x5b4630, 6);
-  blob(.13, 0, .3, 0, 0xb4cf9c, 1); blob(.1, .07, .38, .03, 0xc2d9a8, 2); blob(.09, -.06, .37, -.04, 0xa8c690, 3); blob(.08, .0, .46, .0, 0xc8deb0, 4);
+  cyl(.008, .016, .26, 0, 0, 0, M.TRIM, 0x4a3b2c, 6);
+  for (const [a, l] of [[0, .09], [2.1, .08], [4.2, .085]]) { const g = new THREE.CylinderGeometry(.004, .007, l, 4); g.translate(0, l / 2, 0); g.rotateZ(.7); g.rotateY(a); g.translate(0, .2, 0); addPart(g, M.TRIM, 0x4a3b2c); }
+  foliage(0, .34, 0, .15, .13, .15, 34, .12, 0xd8e6c4, 11); foliage(.06, .43, .03, .09, .07, .09, 12, .1, 0xe6efd6, 12);
   treeA = mkInst(finish(), MATS, NN * 3);
-  cyl(.012, .018, .12, 0, 0, 0, M.TRIM, 0x5b4630, 6);
-  for (const [r, y, hh] of [[.13, .08, .22], [.1, .22, .2], [.07, .35, .18]]) { const g = new THREE.ConeGeometry(r, hh, 9); g.translate(0, y + hh / 2, 0); addPart(g, M.LEAF, 0x2f5e2c); }
+  cyl(.006, .012, .5, 0, 0, 0, M.TRIM, 0x4a3b2c, 6);
+  for (let k = 0; k < 6; k++) { const y = .08 + k * .07, r = .15 * (1 - k / 6.5); foliage(0, y, 0, r, .035, r, 9, .085, 0x9fb38c, 20 + k); }
   treeB = mkInst(finish(), MATS, NN * 3);
   // vehicles: Kenney Car Kit (CC0), scaled so a sedan is about 4.5 m long
   const carMat = new THREE.MeshStandardMaterial({ map: CARTEX, roughness: .42, metalness: .25 });
@@ -1020,7 +1047,7 @@ function buildMeshes() {
 const MASK = 256;
 const maskCanvas = canvas(MASK);
 const maskTex = new THREE.CanvasTexture(maskCanvas);
-const groundGeo = new THREE.PlaneGeometry(N, N, N, N).rotateX(-Math.PI / 2);
+const groundGeo = new THREE.PlaneGeometry(N, N, N * 4, N * 4).rotateX(-Math.PI / 2);   // 4 vertices per tile: smooth river banks
 let ground, water, waterNormal;
 function buildTerrain() {
   const grassT = texFrom(IMG.grass.diff, true, N / 2.2), grassN = texFrom(IMG.grass.nor, false, N / 2.2);
@@ -1040,6 +1067,14 @@ function buildTerrain() {
         vec3 col = mix(gC, fC, mk.g);
         col = mix(col, sC, mk.r);
         col *= .82 + mk.b * .36;
+        // large meadow patches: dry yellowish grass, darker lush strips, so the land never reads as one flat colour
+        vec2 q = vKk * 64.0;
+        float nA = sin(q.x * .21 + sin(q.y * .17) * 2.0) * sin(q.y * .19 + sin(q.x * .13) * 2.0);
+        float nB = sin(q.x * .63 + q.y * .41) * sin(q.y * .57 - q.x * .29);
+        float land = (1.0 - mk.g) * (1.0 - mk.r);
+        col = mix(col, vec3(.17, .15, .06) * (.75 + gl), smoothstep(-.1, .9, nA) * .55 * land);
+        col = mix(col, vec3(.035, .075, .02), smoothstep(.3, 1.0, -nA) * .45 * land);
+        col *= .9 + nB * .1;
         diffuseColor.rgb *= col;`);
   };
   addSnow(mat, .95);
@@ -1159,11 +1194,13 @@ function paintGround() {
   for (let k = 0; k < MASK * MASK; k++) { id.data[k * 4] = img[k * 3] * 255; id.data[k * 4 + 1] = img[k * 3 + 1] * 255; id.data[k * 4 + 2] = clamp(img[k * 3 + 2], 0, 1) * 255; id.data[k * 4 + 3] = 255; }
   g.putImageData(id, 0, 0); maskTex.needsUpdate = true;
   const pos = groundGeo.attributes.position;
+  const wet = (x, z) => { const X = Math.floor(x), Z = Math.floor(z); return inb(X, Z) && type[idx(X, Z)] === T_WATER ? 1 : 0; };
   for (let k = 0; k < pos.count; k++) {
-    const cx = Math.round(pos.getX(k) + HALF), cz = Math.round(pos.getZ(k) + HALF);
-    let all = true;
-    for (const [dx, dz] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { const X = cx + dx, Z = cz + dz; if (!inb(X, Z) || type[idx(X, Z)] !== T_WATER) all = false; }
-    pos.setY(k, all ? -0.45 : 0);
+    const px = pos.getX(k) + HALF, pz = pos.getZ(k) + HALF;
+    let w = 0, n = 0;
+    for (let dz = -.75; dz <= .76; dz += .375) for (let dx = -.75; dx <= .76; dx += .375) { w += wet(px + dx, pz + dz); n++; }
+    w /= n; const t = clamp((w - .45) / .5, 0, 1);
+    pos.setY(k, -0.45 * t * t * (3 - 2 * t));
   }
   pos.needsUpdate = true; groundGeo.computeVertexNormals();
 }
@@ -1287,7 +1324,7 @@ function rebuild() {
     const season = SEASON_OF[month % 12], aut = season === 3 ? .7 : .07, blo = season === 1 ? .3 : .03;
     if (m === treeA && roll < aut) _C.setHSL(.05 + r * .07, .8, .42 + r * .08);     // autumn
     else if (m === treeA && roll < aut + blo) _C.setHSL(.94, .6, .7);              // blossom
-    else _C.setHSL(.25 + r * .07, .5 + r * .15, .22 + r * .1);
+    else _C.setHSL(.22 + r * .08, .38 + r * .15, .34 + r * .1);
     P(m, x, 0, z, s, s * (.9 + r * .3), s, rot, _C);
   };
   bldList = [];
@@ -1871,6 +1908,7 @@ function setTool(t) {
   controls.touches.ONE = panMode ? THREE.TOUCH.PAN : null;
   controls.touches.TWO = panMode ? THREE.TOUCH.DOLLY_ROTATE : THREE.TOUCH.DOLLY_PAN;
   grid.visible = !panMode;
+  if (zoneM) zoneM.material.visible = !!(t && (TOOLDEF[t].zone || t === 'dezone'));   // zone colours only while zoning, like CS2
   $('active').classList.toggle('hidden', panMode);
   const hint = { curve: ' — sürükle, sonra bük', busstop: ' — yola dokun (tekrar dokununca kalkar)', busline: ' — duraklara sırayla dokun, sonra ✓' }[t];
   if (t) $('aText').textContent = `${TOOLDEF[t].icon} ${TOOLDEF[t].name}${hint || (IS_TOUCH ? (SVC[t] ? ' — yere dokun' : ' — sürükle') : '')}`;
