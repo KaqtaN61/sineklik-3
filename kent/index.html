@@ -703,6 +703,24 @@ function foliage(cx, cy, cz, rx, ry, rz, n, size, col, seed) {
     addPart(g, M.FOLIAGE, new THREE.Color(col).multiplyScalar(shade).getHex());
   }
 }
+// Side profile (metres, front at +x) extruded to the car's width; glass band, wheels and lights on top.
+const CARSHAPE = {
+  sedan: { L: 4.6, W: 1.8, body: [[-2.3, .32], [2.3, .32], [2.32, .72], [1.25, .86], [.55, 1.38], [-.95, 1.42], [-1.85, .98], [-2.32, .9]], glass: [[1.2, .9], [.56, 1.33], [-.92, 1.37], [-1.78, .99]] },
+  hatch: { L: 4.1, W: 1.75, body: [[-2.05, .32], [2.05, .32], [2.07, .72], [1.15, .86], [.45, 1.4], [-1.75, 1.42], [-2.05, 1.05], [-2.07, .8]], glass: [[1.1, .9], [.47, 1.35], [-1.68, 1.37], [-1.98, 1.02]] },
+  suv:   { L: 4.75, W: 1.9, body: [[-2.37, .4], [2.37, .4], [2.4, .95], [1.45, 1.05], [.85, 1.68], [-2.15, 1.72], [-2.37, 1.2]], glass: [[1.4, 1.09], [.87, 1.63], [-2.08, 1.67], [-2.3, 1.15]] },
+  van:   { L: 5.0, W: 1.95, body: [[-2.5, .4], [2.5, .4], [2.52, 1.0], [1.95, 1.2], [1.35, 2.0], [-2.5, 2.02]], glass: [[1.92, 1.24], [1.37, 1.95], [.2, 1.97], [.2, 1.25]] },
+};
+const CAR_KIND = { sedan: 'sedan', 'sedan-sports': 'sedan', 'hatchback-sports': 'hatch', suv: 'suv', 'suv-luxury': 'suv', taxi: 'sedan', van: 'van' };
+function carGeo(name) {
+  const c = CARSHAPE[CAR_KIND[name] || 'sedan'], S = MU * 1.05;
+  const ext = (pts, w, mat, col) => { const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))); const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: true, bevelThickness: .06, bevelSize: .05, bevelSegments: 1, curveSegments: 1 }); g.translate(0, 0, -w / 2); g.rotateY(-Math.PI / 2); g.scale(S, S, S); addPart(g, mat, col); };
+  ext(c.body, c.W - .12, M.PAINT, 0xffffff);
+  ext(c.glass, c.W - .06, M.DARK, 0x1a2129);
+  for (const fz of [c.L / 2 - .78, -c.L / 2 + .8]) for (const sx of [-1, 1]) { const g = new THREE.CylinderGeometry(.33, .33, .24, 10); g.rotateZ(Math.PI / 2); g.translate(sx * (c.W / 2 - .1), .33, fz); g.scale(S, S, S); addPart(g, M.DARK, 0x101112); }
+  for (const sx of [-1, 1]) { box(.32 * S, .12 * S, .06 * S, sx * (c.W / 2 - .3) * S, (c.body[2][1] - .12) * S, (c.L / 2 + .04) * S, M.TRIM, 0xfff6d8); box(.3 * S, .1 * S, .06 * S, sx * (c.W / 2 - .3) * S, (c.body[c.body.length - 1][1] - .1) * S, (-c.L / 2 - .04) * S, M.PAINT, 0x8a1010); }
+  if (name === 'taxi') box(.5 * S, .14 * S, .22 * S, 0, 1.44 * S, -.2 * S, M.TRIM, 0xf2f2f2);
+}
+const REALCAR = [0xf2f2f2, 0xe8e8e6, 0xc9ccd0, 0xa9adb2, 0x2a2d31, 0x1d1f22, 0x46505a, 0x1e2f48, 0x6e1c24, 0x8a2a24, 0xb9ae9a, 0x3c4e5f, 0x4a5a44, 0xd8d4c8];
 function lot(mat, s = .98) { box(s, .02, s, 0, 0, 0, mat, mat === M.LAWN ? 0xffffff : 0xd8d6d0); }
 function ac(x, y, z) { box(.05, .03, .04, x, y, z, M.TRIM, 0xbfc3c7); }
 function finish() {
@@ -1617,7 +1635,9 @@ function buildMeshes() {
   treeB = mkInst(finish(), MATS, NN * 3, quality === 2);
   // vehicles: Kenney Car Kit (CC0), scaled so a sedan is about 4.5 m long
   const carMat = new THREE.MeshStandardMaterial({ map: CARTEX, roughness: .42, metalness: .25 });
-  for (const name of [...CIV, ...TRUCKS, ...SPECIAL]) {
+  // civilian cars: modelled here with real proportions (the Kenney kit is kept for trucks and emergency vehicles)
+  for (const name of CIV) { carGeo(name); const g = finish(); VM[name] = mkInst(g, MATS, 220); PM[name] = mkInst(g, MATS, 1600); }
+  for (const name of [...TRUCKS, ...SPECIAL]) {
     const d = CARS[name], g = new THREE.BufferGeometry();
     if (d.pb) {   // packed: int16 positions (/1000), int8 normals (/127), uint16 uvs (/65535), uint16 indices
       const b64 = (str, T) => { const bin = atob(str), u8 = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) u8[k] = bin.charCodeAt(k); return new T(u8.buffer); };
@@ -1913,7 +1933,7 @@ function tryLot(zt, i, d) {
   }
   return null;
 }
-function setLotLvl(lot, L) { if (L <= 0) return dropLot(lot); const up = L > lot.lvl; lot.lvl = L; for (const t of lot.tiles) lvl[t] = L; if (up) startGrowth(lot, 3); }
+function setLotLvl(lot, L) { if (L <= 0) return dropLot(lot); const up = L > lot.lvl; lot.lvl = L; for (const t of lot.tiles) lvl[t] = L; }
 function dropLot(lot, rub = 0) { for (const t of lot.tiles) { if (lotId[t] === lot.id) lotId[t] = 0; lvl[t] = 0; burn[t] = 0; burning.delete(t); if (rub) rubble[t] = rub; } lots.delete(lot.id); }
 function validateLots() {   // any edit that touches a parcel (road, rezoning, bulldozer) clears the whole building
   for (const lot of [...lots.values()]) if (lot.tiles.some(t => lotId[t] !== lot.id || type[t] !== T_EMPTY || zone[t] !== lot.zone || lvl[t] !== lot.lvl)) dropLot(lot);
@@ -2013,7 +2033,7 @@ function rebuild() {
   const counts = new Map(), inc = m => { const n = counts.get(m) || 0; counts.set(m, n + 1); return n; };
   const P = (m, ...a) => put(m, inc(m), ...a);
   const ovOn = overlay !== 'none';
-  const parkCar = (x, z, rot, h) => { if (quality < 2) return P(carLo, x, .02, z, 1, 1, 1, rot, LOCAR[Math.floor(h * 131) % LOCAR.length]); const name = CIV[Math.floor(h * 977) % CIV.length]; P(PM[name], x, .02, z, 1, 1, 1, rot, CAR_TINT[Math.floor(h * 131) % CAR_TINT.length]); };
+  const parkCar = (x, z, rot, h) => { const name = CIV[Math.floor(h * 977) % CIV.length]; P(PM[name], x, .02, z, 1, 1, 1, rot, name === 'taxi' ? 0xf2c230 : REALCAR[Math.floor(h * 131) % REALCAR.length]); };
   const plant = (m, x, z, s, r, rot) => {
     const roll = hash(Math.round(x * 97), Math.round(z * 89), 7);
     const season = SEASON_OF[month % 12], aut = season === 3 ? .7 : .07, blo = season === 1 ? .3 : .03;
@@ -2449,8 +2469,9 @@ function spawnVehicle(start, o) {
   let c;
   if (o.path) c = o.path[1];
   else { const nb = roadNbrs(start); if (!nb.length) return null; c = nb[(Math.random() * nb.length) | 0]; }
-  const v = { a: start, b: start, c, t: 0, pi: 1, off: LANE, color: CAR_TINT[(Math.random() * CAR_TINT.length) | 0], ...o };
+  const v = { a: start, b: start, c, t: 0, pi: 1, off: LANE, color: REALCAR[(Math.random() * REALCAR.length) | 0], ...o };
   v.model = o.model || (v.kind === 'car' ? CIV[(Math.random() * CIV.length) | 0] : v.kind === 'truck' ? TRUCKS[(Math.random() * TRUCKS.length) | 0] : v.kind === 'garbage' ? 'garbage-truck' : ['firetruck', 'police', 'ambulance'].includes(v.kind) ? v.kind : null);
+  if (v.model === 'taxi') v.color = 0xf2c230;
   vehicles.push(v); return v;
 }
 const cpos = i => [i % N - HALF + .5, ((i / N) | 0) - HALF + .5];
@@ -3383,6 +3404,7 @@ applyQuality();
   window.__kent = {
     get stats() { return stats; }, get money() { return money; }, get month() { return month; }, get demand() { return demand; }, get net() { return net; },
     info() { renderer.info.autoReset = false; renderer.info.reset(); if (composer) composer.render(); else renderer.render(scene, camera); const r = renderer.info.render; renderer.info.autoReset = true; let inst = 0, tris = 0; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) { inst += o.count; const g = o.geometry; tris += o.count * (g.index ? g.index.count : g.attributes.position.count) / 3; } }); const top = []; scene.traverse(o => { if (o.isInstancedMesh && o.visible && o.count) { const g = o.geometry, t = (g.index ? g.index.count : g.attributes.position.count) / 3; top.push([Object.keys(LOTMESH).find(k => LOTMESH[k] === o) || (o === treeA ? 'treeA' : o === treeB ? 'treeB' : '?'), o.count, Math.round(t), Math.round(t * o.count)]); } }); top.sort((a, b) => b[3] - a[3]); return { calls: r.calls, tris: r.triangles, inst, instTris: Math.round(tris), q: quality, pr: renderer.getPixelRatio(), top: top.slice(0, 12) }; },
+    finishBuilds() { for (const l of growing) { l.g0 = -1e9; } updateGrowth(); growing.clear(); for (const l of lots.values()) delete l.g0; rebuild(); },
     get lots() { const o = {}; for (const l of lots.values()) { const k = 'RCIO'[l.zone - 1] + l.lvl + ' ' + l.W + 'x' + l.D; o[k] = (o[k] || 0) + 1; } return o; },
     get vehicles() { return vehicles.length; }, get vk() { const o = {}; for (const v of vehicles) o[v.kind] = (o[v.kind] || 0) + 1; o.arrivals = arrivals.length; o.sig = sigList.length; return o; }, get burning() { return burning.size; },
     simTick, setTool, newGame, startFire: (x, z) => startFire(idx(x, z)), setOverlay, focusOn, setDay: v => { dayT = v; }, setDayNight: v => { dayNight = v; },
