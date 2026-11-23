@@ -477,7 +477,7 @@ function applyQuality() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, [1, 1.25, 2][quality]));
   if (treeA) treeA.castShadow = treeB.castShadow = quality === 2;   // foliage shadows are the most expensive part on phones
   // small props skip the shadow pass on phones (each caster costs an extra draw call)
-  if (lampM) for (const m of [lampM, tlightM, stopM, rubbleM, barrierM, railM, signM, roundI, craneM, jibM, pedM, ...Object.values(VM), ...Object.values(PM)]) if (m) m.castShadow = quality === 2;
+  if (lampM) for (const m of [lampM, tlightM, stopM, rubbleM, barrierM, railM, signM, roundI, craneM, jibM, pedM, pedHeadM, ...Object.values(VM), ...Object.values(PM)]) if (m) m.castShadow = quality === 2;
   sun.castShadow = quality > 0;
   const ms = quality === 2 ? 4096 : 2048;
   if (sun.shadow.mapSize.x !== ms) { sun.shadow.mapSize.set(ms, ms); sun.shadow.map?.dispose(); sun.shadow.map = null; }
@@ -1571,11 +1571,12 @@ function commit(mesh, n) { n = Math.min(n, mesh.instanceMatrix.count); mesh.coun
 
 const BMESH = {};
 const VM = {}, PM = {};
+const SKIN = [0xe8c4a8, 0xd9a988, 0xc68e6a, 0xa8714e, 0x8a5a3c, 0xf0d2bc];
 const LOCAR = [0xe8e8e6, 0xf2f2f2, 0x2a2d31, 0x18263d, 0x8b8f94, 0x2b2b2b, 0xb9bcc0, 0x6e1c24, 0xc9cdd2, 0x46505a, 0x8a2a24, 0x3c4e5f];
 const CIV = ['sedan', 'sedan-sports', 'hatchback-sports', 'suv', 'suv-luxury', 'taxi', 'van'], TRUCKS = ['delivery', 'truck', 'garbage-truck'], SPECIAL = ['police', 'ambulance', 'firetruck'];
 const CAR_SCALE = .11, CAR_FLIP = 0, CAR_TINT = [0xffffff, 0xffffff, 0xffffff, 0xf2d6d6, 0xd8e4f5, 0xdedede, 0x9a9a9a, 0xe8f0d8];
 let CARS = null, CARTEX = null;
-let roundM, roundI, craneM, jibM, carLo, hwyM, barrierM, railM, signM, sigM, sig = new Uint8Array(4096), sigList = [], roadM, walkM, cornerM, dashM, zebraM, lampM, tlightM, treeA, treeB, pedM, stainM, trackM, holeM, stopM, lineDotM, medianM, snowPts, rubbleM, zoneM, ovM, prevM, beaconM, flameM, smokeM, glowM;
+let pedHeadM, roundM, roundI, craneM, jibM, carLo, hwyM, barrierM, railM, signM, sigM, sig = new Uint8Array(4096), sigList = [], roadM, walkM, cornerM, dashM, zebraM, lampM, tlightM, treeA, treeB, pedM, stainM, trackM, holeM, stopM, lineDotM, medianM, snowPts, rubbleM, zoneM, ovM, prevM, beaconM, flameM, smokeM, glowM;
 const glowMat = new THREE.MeshBasicMaterial({ color: 0xffd39a, transparent: true, opacity: 0, toneMapped: false, depthWrite: false });
 
 function wearTex(kind) {
@@ -1722,8 +1723,13 @@ function buildMeshes() {
   lineDotM = mkInst(new THREE.CylinderGeometry(.05, .05, .006, 10).translate(0, .026, 0), new THREE.MeshBasicMaterial({ color: 0xffffff }), NN * 2, false);
   box(1, .025, .07, 0, .02, 0, M.TRIM, 0xc9c6bf); box(1, .028, .05, 0, .02, 0, M.LEAF, 0x4c6436);
   medianM = mkInst(finish(), MATS, NN);
-  { const g = new THREE.CapsuleGeometry(.009, .05, 3, 6); g.translate(0, .034, 0); addPart(g, M.PAINT, 0xffffff); const h = new THREE.SphereGeometry(.009, 6, 5); h.translate(0, .078, 0); addPart(h, M.TRIM, 0xe0b899); }
+  // pedestrians at real scale (1.75 m ≈ 0.11 units): clothes mesh tinted per person, head mesh tinted with skin tones
+  for (const x of [-.0042, .0042]) { box(.0058, .048, .0068, x, 0, 0, M.TRIM, 0x5a5d63); box(.006, .004, .009, x, 0, .001, M.DARK, 0x1a1a1a); }
+  box(.02, .036, .012, 0, .047, 0, M.TRIM, 0xffffff); for (const x of [-.0128, .0128]) box(.005, .032, .006, x, .05, 0, M.TRIM, 0xf2f2f2);
+  box(.006, .006, .006, 0, .083, 0, M.TRIM, 0xd9b08c);
   pedM = mkInst(finish(), MATS, 400);
+  { const h = new THREE.SphereGeometry(.0078, 8, 6); h.scale(1, 1.12, 1); h.translate(0, .095, 0); addPart(h, M.TRIM, 0xffffff); const hair = new THREE.SphereGeometry(.0082, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2); hair.translate(0, .0965, -.0008); addPart(hair, M.DARK, 0x2a2018); }
+  pedHeadM = mkInst(finish(), MATS, 400);
   const decal = (tex, w, d, y, max, opts = {}) => { const g = new THREE.PlaneGeometry(w, d); g.rotateX(-Math.PI / 2); g.translate(0, y, 0); return mkInst(g, new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: .9, polygonOffset: true, polygonOffsetFactor: -1, ...opts }), max, false); };
   stainM = decal(wearTex('stain'), .5, .5, .0205, NN);
   trackM = decal(wearTex('track'), 1, .07, .0207, NN * 2);
@@ -2691,13 +2697,13 @@ function drawVehicles(time) {
       rot = Math.atan2(2 * u * (P1[0] - P0[0]) + 2 * t * (P2[0] - P1[0]), 2 * u * (P1[1] - P0[1]) + 2 * t * (P2[1] - P1[1]));
     }
     v.px = x; v.pz = z; v.prot = rot;
-    if (v.kind === 'ped') { put(pedM, np++, x, .034 + Math.abs(Math.sin(time * 9 + v.b)) * .004, z, 1, 1, 1, rot, v.color); continue; }
+    if (v.kind === 'ped') { put(pedHeadM, np, x, .034 + Math.abs(Math.sin(time * 9 + v.b)) * .004, z, 1, 1, 1, rot, SKIN[v.b % SKIN.length]); put(pedM, np++, x, .034 + Math.abs(Math.sin(time * 9 + v.b)) * .004, z, 1, 1, 1, rot, v.color); continue; }
     const n = vc[v.model] = (vc[v.model] || 0) + 1;
     put(VM[v.model], n - 1, x, .02, z, 1, 1, 1, rot, SPECIAL.includes(v.model) ? 0xffffff : v.color);
     if (SPECIAL.includes(v.model)) put(beaconM, nb++, x, .2, z, 1, 1, 1, rot, Math.floor(time * 6 + v.b) % 2 ? 0xff2d2d : 0x2d6bff);
   }
   for (const k in VM) commit(VM[k], vc[k] || 0);
-  commit(beaconM, nb); commit(pedM, np);
+  commit(beaconM, nb); commit(pedM, np); commit(pedHeadM, np);
   // traffic-light heads: one lamp per direction
   let ns = 0; const ph = sigPhase(), amber = sigTime % SIG_PERIOD > SIG_PERIOD - 1.2;
   for (const i of sigList) {
