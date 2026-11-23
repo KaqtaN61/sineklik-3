@@ -3105,8 +3105,9 @@ function showInfo(c) {
     if (s.kind === 'park') h += '<br>Çevredeki arazi değerini ve mutluluğu artırır.';
     if (d.radius) h += `<br>Kapsama yarıçapı: ${d.radius} kare`;
   } else if (zone[i] && lvl[i]) {
-    const L = lvl[i], who = zone[i] === Z_R ? `${RES[L]} sakin` : `${(zone[i] === Z_C ? COMJ : zone[i] === Z_O ? OFFJ : INDJ)[L]} çalışan`;
-    h = `<h3>${ZONE_ICON[zone[i]]} ${ZONE_NAME[zone[i]]} · Seviye ${L}</h3>${who}${burn[i] ? ' · <span class="neg">🔥 YANIYOR</span>' : ''}<br>`;
+    const L = lvl[i], nT = lotAt(i)?.tiles.length || 1, who = zone[i] === Z_R ? `${RES[L] * nT} sakin` : `${(zone[i] === Z_C ? COMJ : zone[i] === Z_O ? OFFJ : INDJ)[L] * nT} çalışan`;
+    const lt = lotAt(i), kindName = lt ? ({ 1: ['Sıra evler', 'Apartman', 'Yüksek konut'], 2: ['Dükkânlar', 'Çarşı ve konut', 'Alışveriş merkezi'], 3: ['Depo', 'Fabrika', 'Sanayi tesisi'], 4: ['Ofis', 'Ofis binası', 'Gökdelen'] }[lt.zone] || [])[L - 1] : '';
+    h = `<h3>${kindName || ZONE_NAME[zone[i]]} · Seviye ${L}</h3>${lt ? `<span class="muted">${ZONE_NAME[lt.zone]} · ${lt.W}×${lt.D} parsel (${lt.W * 16}×${lt.D * 16} m)${growth(lt) < 1 ? ' · inşaat sürüyor' : ''}</span><br>` : ''}${who}${burn[i] ? ' · <span class="neg">🔥 YANIYOR</span>' : ''}<br>`;
     h += `⚡ ${served[i] & 1 ? '✓' : '✗'} 💧 ${served[i] & 2 ? '✓' : '✗'} 🚿 ${served[i] & 4 ? '✓' : '✗'} 🗑️ ${served[i] & 8 ? '✓' : '✗'}<br>Arazi değeri ${meter(landValue(i))} · Kirlilik ${meter(Math.min(1, poll[i] / 8), false)}<br>${cov.transit[i] ? `🚌 Toplu taşıma ${meter(cov.transit[i])}<br>` : ''}`;
     if (zone[i] === Z_R) h += `Mutluluk ${meter(happy[i] / 100)} · Suç ${meter(crime[i], false)}<br>`;
     h += covLine(i);
@@ -3456,7 +3457,7 @@ function auInit() {
   if (AU.ctx || !AU.on) return;
   try { AU.ctx = new (window.AudioContext || window.webkitAudioContext)(); AU.out = AU.ctx.createGain(); AU.out.gain.value = .55; AU.out.connect(AU.ctx.destination); startAmbience(); } catch (e) { AU.ctx = null; }
 }
-addEventListener('pointerdown', () => { auInit(); AU.ctx?.state === 'suspended' && AU.ctx.resume(); }, true);
+addEventListener('pointerdown', e => { auInit(); AU.ctx?.state === 'suspended' && AU.ctx.resume(); if (e.target.closest?.('button')) SFX.click(); }, true);
 function tone(f, dur, type = 'sine', vol = .15, slide = 0, delay = 0) {
   const c = AU.ctx; if (!c || !AU.on) return; const t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain();
   o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + dur);
