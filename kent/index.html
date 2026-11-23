@@ -470,6 +470,8 @@ function sizeTilt() {
 function applyQuality() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, [1, 1.25, 2][quality]));
   if (treeA) treeA.castShadow = treeB.castShadow = quality === 2;   // foliage shadows are the most expensive part on phones
+  // small props skip the shadow pass on phones (each caster costs an extra draw call)
+  if (lampM) for (const m of [lampM, tlightM, stopM, rubbleM, barrierM, railM, signM, roundI, craneM, jibM, pedM, ...Object.values(VM), ...Object.values(PM)]) if (m) m.castShadow = quality === 2;
   sun.castShadow = quality > 0;
   const ms = quality === 2 ? 4096 : 2048;
   if (sun.shadow.mapSize.x !== ms) { sun.shadow.mapSize.set(ms, ms); sun.shadow.map?.dispose(); sun.shadow.map = null; }
@@ -1975,7 +1977,7 @@ const LOTMESH = {};
 function lotMesh(lot) {
   const zc = 'RCIO'[lot.zone - 1];
   if (lot.W === 1 && lot.D === 1 && !MK) { const list = BMESH[zc + lot.lvl]; return list[lot.v % list.length]; }
-  const key = `${zc}${lot.lvl}_${lot.W}x${lot.D}_${lot.v % 2}`;
+  const key = `${zc}${lot.lvl}_${lot.W}x${lot.D}_${quality < 2 ? 0 : lot.v % 2}`;   // phones: one variant per type, fewer draw calls
   if (!LOTMESH[key]) { LOTGEN[zc](rng(key.split('').reduce((h, c) => h * 31 + c.charCodeAt(0) | 0, 7)), lot.W, lot.D, lot.lvl); LOTMESH[key] = mkInst(finish(), MATS, 160); }
   return LOTMESH[key];
 }
@@ -3533,7 +3535,7 @@ async function loadAssets() {
   await Promise.all(jobs);
   $('loadMsg').textContent = 'Şehir inşa ediliyor…';
   await new Promise(r => setTimeout(r, 30));
-  buildMaterials(); buildMeshes(); buildTerrain(); buildScenery();
+  buildMaterials(); buildMeshes(); buildTerrain(); buildScenery(); applyQuality();
   MATS.forEach((m, k) => { if (k !== M.Q_GLASS && k !== M.Q_INT) addSnow(m, k === M.LEAF ? .6 : k === M.PAVE ? .7 : 1); }); addSnow(roadM.material, .35); addSnow(walkM.material, .7); addSnow(cornerM.material, .7);
   { const n = 1500, pos = new Float32Array(n * 3); for (let k = 0; k < n; k++) { pos[k * 3] = (Math.random() - .5) * 40; pos[k * 3 + 1] = Math.random() * 18; pos[k * 3 + 2] = (Math.random() - .5) * 40; }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
