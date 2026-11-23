@@ -1159,6 +1159,28 @@ function flag(x, z, h = 9, col = 0xd62828) { cyl(.006, .006, h * MU, x * MU, .02
 function plaza(W, D, z0, z1) { box(W - .04, .006, z1 - z0, 0, .021, (z0 + z1) / 2, M.PAVE); }
 function court(x, z, w, d, col = 0xb5523b) { box(w * MU, .02, d * MU, x * MU, .02, z * MU, M.TRIM, col); box((w - 3) * MU, .025, (d - 3) * MU, x * MU, .02, z * MU, M.LAWN); box(.25 * MU, .03, (d - 3) * MU, x * MU, .02, z * MU, M.TRIM, 0xffffff); }
 const QSVC = {
+  power(r) {
+    box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
+    qAt(-7, -9, () => qBuilding(r, 16, 12, 4, 'brick', 'office', { mansard: false, tint: 0xd9c9bc }));
+    for (const [x, z] of [[.45, -.45], [.45, .45]]) lathe([[.36, 0], [.3, .35], [.25, .7], [.27, .95], [.29, 1.05], [.27, 1.05], [.25, .95], [.23, .7], [.28, .35], [.34, .02]], x, .02, z, M.TRIM, 0xd8d6d0, 28);
+    cyl(.05, .065, 1.9, -.75, .02, .5, M.TRIM, 0xb9b0a8); cyl(.053, .053, .1, -.75, 1.7, .5, M.PAINT, 0xb73a2e); cyl(.053, .053, .06, -.75, 1.5, .5, M.TRIM, 0xffffff);
+    box(.5, .2, .3, -.4, .02, .35, M.TRIM, 0x8a9096); fence(2, 2);
+  },
+  sewage(r) {
+    box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
+    for (const [x, z] of [[-.45, -.45], [.45, -.45], [-.45, .45]]) { cyl(.36, .36, .1, x, .02, z, M.TRIM, 0xc9c6bf, 28); cyl(.32, .32, .104, x, .02, z, M.DARK, 0x55634a, 28); box(.64, .01, .02, x, .125, z, M.TRIM, 0x7a7f84); }
+    qAt(8, 8, () => qBuilding(r, 10, 8, 2, 'loft', 'office', { mansard: false })); fence(2, 2);
+  },
+  culture(r) {
+    box(2.96, .02, 2.96, 0, 0, 0, M.PAVE);
+    for (let k = 0; k < 3; k++) box(2.2 - k * .06, .03, 1.5 - k * .06, 0, .02 + k * .03, -.25, M.TRIM, 0xe9e3d6);
+    qAt(0, -8, () => qBuilding(r, 32, 18, 3, 'stone', 'office', { mansard: false, tint: 0xf4eee2 }));
+    for (let k = 0; k < 9; k++) qAt(-12 + k * 3, 2, () => { for (let f = 0; f < 3; f++) qp('Trim_Column_Center', 0, f * 3, 0); });
+    box(28 * MU, .6 * MU, 3 * MU, 0, .02 + 9 * MU, 2 * MU, M.TRIM, 0xefe7d6); gable(28 * MU, 2.4 * MU, 3.4 * MU, 0, .02 + 9.6 * MU, 2 * MU, M.TRIM, 0xefe7d6, true);
+    const dome = new THREE.SphereGeometry(6.5 * MU, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2); dome.translate(0, .02 + 9.2 * MU, -8 * MU); addPart(dome, M.PAINT, 0x6c9a8b);
+    cyl(.06, .08, .2, 0, .02 + 15.6 * MU, -8 * MU, M.TRIM, 0xefe7d6, 12); cyl(.005, .005, .18, 0, .02 + 15.6 * MU + .2, -8 * MU, M.PAINT, 0xd4af37, 6);
+    for (const [x, z] of [[-1.2, .9], [1.2, .9], [-1.2, -1.2], [1.2, -1.2]]) blob(.13, x, .2, z, 0x4b8a36, Math.round(x * 11 + z * 3));
+  },
   policepost(r) { box(.98, .02, .98, 0, 0, 0, M.PAVE); qAt(0, -1.5, () => qBuilding(r, 12, 9, 2, 'stone', 'office', { mansard: false })); box(12.2 * MU, .9 * MU, 9.2 * MU, 0, .02 + 2.4 * MU, -1.5 * MU, M.PAINT, 0x23407a); sign(0, 6.6, 3.1, 5, 0x23407a); parking(-.45, .45, .27, .47); flag(5.5, 5); },
   police(r) {
     box(1.96, .02, 1.96, 0, 0, 0, M.PAVE);
@@ -2092,7 +2114,7 @@ function rebuild() {
   const parkCar = (x, z, rot, h) => { const name = CIV[Math.floor(h * 977) % CIV.length]; P(PM[name], x, .02, z, 1, 1, 1, rot, name === 'taxi' ? 0xf2c230 : REALCAR[Math.floor(h * 131) % REALCAR.length]); };
   const plant = (m, x, z, s, r, rot) => {
     const roll = hash(Math.round(x * 97), Math.round(z * 89), 7);
-    const season = SEASON_OF[month % 12], aut = season === 3 ? .7 : .07, blo = season === 1 ? .3 : .03;
+    const season = SEASON_OF[month % 12], aut = season === 3 ? .7 : .04, blo = season === 1 ? .3 : 0;
     if (m === treeA && roll < aut) _C.setHSL(.05 + r * .07, .8, .42 + r * .08);     // autumn
     else if (m === treeA && roll < aut + blo) _C.setHSL(.94, .6, .7);              // blossom
     else _C.setHSL(.22 + r * .08, .38 + r * .15, .34 + r * .1);
@@ -3615,6 +3637,7 @@ applyQuality();
     setWeather(w) { weather = w; CLOUD = w ? (w === 1 ? .55 : .9) : 0; WET = w >= 2 ? 1 : 0; hud(); },
     fireSome() { const l = [...lots.values()].find(l => l.lvl >= 2) || [...lots.values()][0]; startFire(l.anchor); const x = l.anchor % N, z = (l.anchor / N) | 0; this.lookAt(x, z, 5, 4); return [x, z]; },
     cam(m) { setCamMode(m); },
+    buildSvc(kind, x, z) { addService(kind, x, z, nextSvc++); refresh(); this.lookAt(x + 1, z + 1, 6, 4); },
     finishBuilds() { for (const l of growing) { l.g0 = -1e9; } updateGrowth(); growing.clear(); for (const l of lots.values()) delete l.g0; rebuild(); },
     get lots() { const o = {}; for (const l of lots.values()) { const k = 'RCIO'[l.zone - 1] + l.lvl + ' ' + l.W + 'x' + l.D; o[k] = (o[k] || 0) + 1; } return o; },
     get vehicles() { return vehicles.length; }, get vk() { const o = {}; for (const v of vehicles) o[v.kind] = (o[v.kind] || 0) + 1; o.arrivals = arrivals.length; o.sig = sigList.length; return o; }, get burning() { return burning.size; },
